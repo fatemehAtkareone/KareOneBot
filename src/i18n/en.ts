@@ -7,17 +7,27 @@ const en: Dict = {
   bootstrap_already: "This workspace is already set up. Ignoring install token.",
   help_title: "<b>KareOne Bot — Commands</b>",
   help_body:
-    "/newtask — create a task (interactive)\n" +
-    "/mytasks — list tasks assigned to you\n" +
+    "<b>📋 Tasks</b>\n" +
+    "/newtask — interactive 7-step wizard\n" +
+    "/mytasks — visual list with filters &amp; sort\n" +
+    "/task &lt;id&gt; — open a task card\n" +
     "/today — tasks due today\n" +
     "/overdue — overdue tasks\n" +
-    "/done &lt;id&gt; — mark a task done\n" +
-    "/assign &lt;id&gt; @user — reassign a task\n" +
+    "/done &lt;id&gt; — quick mark done\n" +
+    "/assign &lt;id&gt; @user — reassign\n\n" +
+    "<b>⏱️ Time</b>\n" +
+    "/work start &lt;id&gt; · /work stop &lt;id&gt; · /work status\n\n" +
+    "<b>❓ Q&amp;A · Knowledge base</b>\n" +
     "/ask @user &lt;question&gt; — ask a teammate\n" +
+    "/answer &lt;qid&gt; &lt;text&gt; — reply\n" +
+    "/questions — open questions\n" +
+    "/kb &lt;query&gt; — search past answers\n\n" +
+    "<b>⚙️ You &amp; workspace</b>\n" +
+    "/settings — preferences menu\n" +
     "/whoami — show your profile\n" +
     "/lang — switch language (fa/en)\n" +
-    "/invite — generate an invite link (admins)\n" +
-    "/help — show this help",
+    "/invite — invite link (admins)\n" +
+    "/help — this help",
   whoami: "<b>{name}</b> — role: <code>{role}</code> — workspace: <b>{workspace}</b>",
   unknown_command: "I didn't understand that. Try /help.",
   task_created: "✅ Task <b>#{id}</b> created: {title}",
