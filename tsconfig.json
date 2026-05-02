@@ -19,6 +19,6 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src/**/*", "netlify/**/*", "scripts/**/*", "drizzle.config.ts"],
-  "exclude": ["node_modules", "dist", ".netlify"]
+  "include": ["src/**/*", "netlify/**/*", "drizzle.config.ts"],
+  "exclude": ["node_modules", "dist", ".netlify", "scripts"]
 }
