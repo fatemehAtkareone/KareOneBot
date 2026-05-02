@@ -2,56 +2,39 @@ import type { Context } from "grammy";
 import { and, eq, desc } from "drizzle-orm";
 import { DateTime } from "luxon";
 import { db, schema } from "@/lib/db";
-import { getMembershipByTelegramId, hasRole } from "@/lib/rbac";
+import { getMembershipByTelegramId } from "@/lib/rbac";
 import { h, sendMessage } from "@/lib/telegram";
 import { audit } from "@/lib/audit";
-import { setState, getState, clearState, redis } from "@/lib/redis";
+import { setState, clearState, redis } from "@/lib/redis";
 import { taskActionsKb, priorityChooseKb, snoozeKb, reschedKb, reassignKb } from "@/lib/keyboards";
+import { t } from "@/i18n";
+import { userLang } from "@/lib/locale";
 import { log } from "@/lib/logger";
 
 const TZ = "Asia/Tehran";
-
-const PRIORITY_LABEL: Record<string, string> = {
-  p0: "🔴 P0",
-  p1: "🟠 P1",
-  p2: "🟡 P2",
-  p3: "🟢 P3",
+const PRIORITY_LABEL: Record<string, string> = { p0: "🔴 P0", p1: "🟠 P1", p2: "🟡 P2", p3: "🟢 P3" };
+const STATUS_KEYS: Record<string, string> = {
+  open: "status_open", assigned: "status_assigned", in_progress: "status_in_progress",
+  blocked: "status_blocked", in_review: "status_in_review", done: "status_done",
+  cancelled: "status_cancelled", rejected: "status_rejected", archived: "status_archived", draft: "status_draft",
 };
 
-const STATUS_EMOJI: Record<string, string> = {
-  open: "📂 Open",
-  assigned: "📌 Assigned",
-  in_progress: "🔧 In progress",
-  blocked: "🛑 Blocked",
-  in_review: "👀 In review",
-  done: "✅ Done",
-  cancelled: "❌ Cancelled",
-  rejected: "🚫 Rejected",
-  archived: "🗄️ Archived",
-  draft: "📝 Draft",
-};
-
-interface AddCommentState {
-  flow: "comment";
-  taskId: number;
-}
-interface AddSubtaskState {
-  flow: "subtask";
-  parentId: number;
-}
+interface AddCommentState { flow: "comment"; taskId: number }
+interface AddSubtaskState { flow: "subtask"; parentId: number }
 
 export async function handleCallback(ctx: Context, parts: string[]) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const verb = parts[0]!;
   const taskId = Number(parts[1]);
   if (!Number.isInteger(taskId) && !["rapg"].includes(verb)) {
-    await ctx.answerCallbackQuery({ text: "Bad task id." }).catch(() => {});
+    await ctx.answerCallbackQuery({ text: t(lc, "not_found") }).catch(() => {});
     return;
   }
 
   const m = await getMembershipByTelegramId(tg.id);
   if (!m) {
-    await ctx.answerCallbackQuery({ text: "Not a member." }).catch(() => {});
+    await ctx.answerCallbackQuery({ text: t(lc, "not_member") }).catch(() => {});
     return;
   }
 
@@ -73,30 +56,30 @@ export async function handleCallback(ctx: Context, parts: string[]) {
     case "tcancel":
       return setStatus(ctx, taskId, m.userId, m.workspaceId, "cancelled");
     case "prio":
-      return ctx.editMessageText(`⚡ Choose priority for task #${taskId}:`, {
+      return ctx.editMessageText(t(lc, "priority_prompt", { id: String(taskId) }), {
         parse_mode: "HTML",
-        reply_markup: { inline_keyboard: priorityChooseKb(taskId) },
+        reply_markup: { inline_keyboard: priorityChooseKb(lc, taskId) },
       });
     case "setprio":
       return setPriority(ctx, taskId, m.userId, m.workspaceId, parts[2] as "p0" | "p1" | "p2" | "p3");
     case "snz":
-      return ctx.editMessageText(`⏰ Snooze task #${taskId} until:`, {
+      return ctx.editMessageText(t(lc, "snooze_prompt", { id: String(taskId) }), {
         parse_mode: "HTML",
-        reply_markup: { inline_keyboard: snoozeKb(taskId) },
+        reply_markup: { inline_keyboard: snoozeKb(lc, taskId) },
       });
     case "setsnz":
       return setSnooze(ctx, taskId, m.userId, m.workspaceId, parts[2]!);
     case "resched":
-      return ctx.editMessageText(`📅 Reschedule task #${taskId}:`, {
+      return ctx.editMessageText(t(lc, "resched_prompt", { id: String(taskId) }), {
         parse_mode: "HTML",
-        reply_markup: { inline_keyboard: reschedKb(taskId) },
+        reply_markup: { inline_keyboard: reschedKb(lc, taskId) },
       });
     case "setdue":
       return setDue(ctx, taskId, m.userId, m.workspaceId, parts[2]!);
     case "reassign":
-      return openReassign(ctx, taskId, m.workspaceId, 0);
+      return openReassign(ctx, lc, taskId, m.workspaceId, 0);
     case "rapg":
-      return openReassign(ctx, taskId, m.workspaceId, Number(parts[2] ?? 0));
+      return openReassign(ctx, lc, taskId, m.workspaceId, Number(parts[2] ?? 0));
     case "setasgn":
       return setAssignee(ctx, taskId, m.userId, m.workspaceId, parts[2]!);
     case "watch":
@@ -112,35 +95,35 @@ export async function handleCallback(ctx: Context, parts: string[]) {
     case "wstop":
       return stopWorkTimer(ctx, taskId, m.userId, m.workspaceId);
     case "lbl":
-      return ctx.answerCallbackQuery({ text: "Labels — coming in admin menu" }).catch(() => {});
+      return ctx.answerCallbackQuery({ text: "🏷️" }).catch(() => {});
     default:
       return;
   }
 }
 
-/** /task <id> command alias for direct viewing. */
 export async function handleViewTask(ctx: Context, args: string[]) {
+  const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const idArg = args[0];
   const id = idArg ? Number(idArg.replace(/^#/, "")) : NaN;
   if (!Number.isInteger(id)) {
-    await ctx.reply("Usage: /task <id>");
+    await ctx.reply(t(lc, "invalid_format", { usage: "/task <id>" }));
     return;
   }
   await renderTask(ctx, id);
 }
 
-// ----- core renderer -----
-
 async function renderTask(ctx: Context, taskId: number) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const m = await getMembershipByTelegramId(tg.id);
   if (!m) {
-    await replyOrEdit(ctx, "Not a member of this workspace.");
+    await replyOrEdit(ctx, t(lc, "not_member"));
     return;
   }
-  const t = await loadTask(taskId, m.workspaceId);
-  if (!t) {
-    await replyOrEdit(ctx, `Task #${taskId} not found.`);
+  const task = await loadTask(taskId, m.workspaceId);
+  if (!task) {
+    await replyOrEdit(ctx, t(lc, "task_not_found", { id: String(taskId) }));
     return;
   }
   const watching = await isWatching(taskId, m.userId);
@@ -149,28 +132,28 @@ async function renderTask(ctx: Context, taskId: number) {
   const comments = await loadRecentComments(taskId);
   const timer = await currentTimerForUser(taskId, m.userId);
 
-  const dueText = t.dueAt
-    ? DateTime.fromJSDate(t.dueAt).setZone(TZ).toFormat("yyyy-LL-dd HH:mm")
+  const dueText = task.dueAt
+    ? DateTime.fromJSDate(task.dueAt).setZone(TZ).toFormat("yyyy-LL-dd HH:mm")
     : "—";
-  const overdue = t.dueAt && t.dueAt < new Date() && t.status !== "done";
+  const overdue = task.dueAt && task.dueAt < new Date() && task.status !== "done";
 
   const lines: string[] = [];
-  lines.push(`<b>#${t.id} · ${h(t.title)}</b>`);
-  if (t.description) lines.push(`\n${h(t.description)}`);
+  lines.push(`<b>#${task.id} · ${h(task.title)}</b>`);
+  if (task.description) lines.push(`\n${h(task.description)}`);
   lines.push("");
-  lines.push(`${STATUS_EMOJI[t.status] ?? t.status}  ·  ${PRIORITY_LABEL[t.priority] ?? t.priority}`);
-  lines.push(`📅 Due: ${overdue ? "🚨 " : ""}${h(dueText)}`);
-  lines.push(`👤 ${assignees.length === 0 ? "Unassigned" : assignees.map((a) => h(a)).join(", ")}`);
-  if (t.recurrenceRule) lines.push(`🔁 Recurrence: <code>${h(t.recurrenceRule)}</code>`);
+  lines.push(`${t(lc, STATUS_KEYS[task.status]!)}  ·  ${PRIORITY_LABEL[task.priority] ?? task.priority}`);
+  lines.push(t(lc, "card_due_label", { due: (overdue ? "🚨 " : "") + h(dueText) }));
+  lines.push(`👤 ${assignees.length === 0 ? t(lc, "card_unassigned") : assignees.map(h).join(", ")}`);
+  if (task.recurrenceRule) lines.push(t(lc, "card_recurrence", { rule: h(task.recurrenceRule) }));
   if (subtasks.length) {
-    lines.push(`\n<b>Subtasks (${subtasks.length}):</b>`);
+    lines.push("\n" + t(lc, "card_subtasks_header", { n: String(subtasks.length) }));
     for (const s of subtasks.slice(0, 8)) {
       const tick = s.status === "done" ? "✅" : "⬜";
       lines.push(`${tick} #${s.id} ${h(s.title)}`);
     }
   }
   if (comments.length) {
-    lines.push(`\n<b>Recent comments:</b>`);
+    lines.push("\n" + t(lc, "card_recent_comments"));
     for (const c of comments) {
       const when = DateTime.fromJSDate(c.createdAt).setZone(TZ).toFormat("LL-dd HH:mm");
       lines.push(`💬 <i>${h(c.author)}</i> · ${when}\n${h(c.body.slice(0, 200))}`);
@@ -178,67 +161,39 @@ async function renderTask(ctx: Context, taskId: number) {
   }
   if (timer) {
     const mins = Math.floor((Date.now() - timer) / 60000);
-    lines.push(`\n⏱️ Timer running · ${mins} min`);
+    lines.push("\n" + t(lc, "card_timer_running", { min: String(mins) }));
   }
 
   await replyOrEdit(ctx, lines.join("\n"), {
-    reply_markup: { inline_keyboard: taskActionsKb(t.id, t.status, watching) },
+    reply_markup: { inline_keyboard: taskActionsKb(lc, task.id, task.status, watching) },
   });
 }
 
-// ----- mutations -----
-
 async function setStatus(
-  ctx: Context,
-  taskId: number,
-  userId: number,
-  workspaceId: number,
+  ctx: Context, taskId: number, userId: number, workspaceId: number,
   status: "open" | "in_progress" | "blocked" | "in_review" | "done" | "cancelled"
 ) {
   const updated = await db()
     .update(schema.tasks)
-    .set({
-      status,
-      completedAt: status === "done" ? new Date() : null,
-      updatedAt: new Date(),
-    })
+    .set({ status, completedAt: status === "done" ? new Date() : null, updatedAt: new Date() })
     .where(and(eq(schema.tasks.id, taskId), eq(schema.tasks.workspaceId, workspaceId)))
     .returning({ id: schema.tasks.id });
   if (!updated[0]) return;
-  await audit({
-    workspaceId,
-    actorId: userId,
-    action: "status_change",
-    entity: "task",
-    entityId: taskId,
-    diff: { status },
-  });
-  await notifyWatchers(taskId, userId, `🔄 <b>#${taskId}</b> status → <i>${status}</i>`);
+  await audit({ workspaceId, actorId: userId, action: "status_change", entity: "task", entityId: taskId, diff: { status } });
+  const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
+  await notifyWatchers(taskId, userId, t(lc, "notify_status_change", { id: String(taskId), status }));
   await renderTask(ctx, taskId);
 }
 
-async function setPriority(
-  ctx: Context,
-  taskId: number,
-  userId: number,
-  workspaceId: number,
-  priority: "p0" | "p1" | "p2" | "p3"
-) {
-  await db()
-    .update(schema.tasks)
-    .set({ priority, updatedAt: new Date() })
+async function setPriority(ctx: Context, taskId: number, userId: number, workspaceId: number, priority: "p0" | "p1" | "p2" | "p3") {
+  await db().update(schema.tasks).set({ priority, updatedAt: new Date() })
     .where(and(eq(schema.tasks.id, taskId), eq(schema.tasks.workspaceId, workspaceId)));
   await audit({ workspaceId, actorId: userId, action: "update", entity: "task", entityId: taskId, diff: { priority } });
   await renderTask(ctx, taskId);
 }
 
-async function setSnooze(
-  ctx: Context,
-  taskId: number,
-  userId: number,
-  workspaceId: number,
-  preset: string
-) {
+async function setSnooze(ctx: Context, taskId: number, userId: number, workspaceId: number, preset: string) {
   const now = DateTime.now().setZone(TZ);
   let next: DateTime;
   switch (preset) {
@@ -248,13 +203,9 @@ async function setSnooze(
     case "mon9": next = now.plus({ weeks: 1 }).set({ weekday: 1, hour: 9, minute: 0 }); break;
     default: return;
   }
-  await db()
-    .update(schema.tasks)
-    .set({ dueAt: next.toJSDate(), updatedAt: new Date() })
+  await db().update(schema.tasks).set({ dueAt: next.toJSDate(), updatedAt: new Date() })
     .where(and(eq(schema.tasks.id, taskId), eq(schema.tasks.workspaceId, workspaceId)));
   await audit({ workspaceId, actorId: userId, action: "update", entity: "task", entityId: taskId, diff: { snoozedTo: next.toISO() } });
-
-  // Reset notification dedup keys so reminders fire again
   const r = redis();
   if (r) {
     await r.del(`notify:duesoon:${taskId}:${userId}`);
@@ -263,13 +214,7 @@ async function setSnooze(
   await renderTask(ctx, taskId);
 }
 
-async function setDue(
-  ctx: Context,
-  taskId: number,
-  userId: number,
-  workspaceId: number,
-  preset: string
-) {
+async function setDue(ctx: Context, taskId: number, userId: number, workspaceId: number, preset: string) {
   const now = DateTime.now().setZone(TZ);
   let dueAt: Date | null = null;
   if (preset === "none") dueAt = null;
@@ -285,9 +230,7 @@ async function setDue(
     }
     dueAt = date.set({ hour: 17, minute: 0, second: 0, millisecond: 0 }).toJSDate();
   }
-  await db()
-    .update(schema.tasks)
-    .set({ dueAt, updatedAt: new Date() })
+  await db().update(schema.tasks).set({ dueAt, updatedAt: new Date() })
     .where(and(eq(schema.tasks.id, taskId), eq(schema.tasks.workspaceId, workspaceId)));
   await audit({ workspaceId, actorId: userId, action: "update", entity: "task", entityId: taskId, diff: { dueAt: dueAt?.toISOString() ?? null } });
   const r = redis();
@@ -298,14 +241,9 @@ async function setDue(
   await renderTask(ctx, taskId);
 }
 
-async function openReassign(ctx: Context, taskId: number, workspaceId: number, page: number) {
+async function openReassign(ctx: Context, lc: string, taskId: number, workspaceId: number, page: number) {
   const members = await db()
-    .select({
-      id: schema.users.id,
-      first: schema.users.firstName,
-      last: schema.users.lastName,
-      uname: schema.users.telegramUsername,
-    })
+    .select({ id: schema.users.id, first: schema.users.firstName, last: schema.users.lastName, uname: schema.users.telegramUsername })
     .from(schema.users)
     .innerJoin(schema.memberships, eq(schema.memberships.userId, schema.users.id))
     .where(and(eq(schema.memberships.workspaceId, workspaceId), eq(schema.memberships.active, true)))
@@ -314,19 +252,13 @@ async function openReassign(ctx: Context, taskId: number, workspaceId: number, p
     id: r.id,
     name: [r.first, r.last].filter(Boolean).join(" ") || (r.uname ? `@${r.uname}` : `user#${r.id}`),
   }));
-  await ctx.editMessageText(`👤 Reassign task #${taskId} to:`, {
+  await ctx.editMessageText(t(lc, "reassign_prompt", { id: String(taskId) }), {
     parse_mode: "HTML",
-    reply_markup: { inline_keyboard: reassignKb(taskId, list, page) },
+    reply_markup: { inline_keyboard: reassignKb(lc, taskId, list, page) },
   });
 }
 
-async function setAssignee(
-  ctx: Context,
-  taskId: number,
-  userId: number,
-  workspaceId: number,
-  target: string
-) {
+async function setAssignee(ctx: Context, taskId: number, userId: number, workspaceId: number, target: string) {
   let newId: number;
   if (target === "self") newId = userId;
   else newId = Number(target);
@@ -334,20 +266,20 @@ async function setAssignee(
 
   await db().delete(schema.taskAssignees).where(eq(schema.taskAssignees.taskId, taskId));
   await db().insert(schema.taskAssignees).values({ taskId, userId: newId });
-  await db()
-    .update(schema.tasks)
-    .set({ status: "assigned", updatedAt: new Date() })
+  await db().update(schema.tasks).set({ status: "assigned", updatedAt: new Date() })
     .where(and(eq(schema.tasks.id, taskId), eq(schema.tasks.workspaceId, workspaceId)));
   await audit({ workspaceId, actorId: userId, action: "assign", entity: "task", entityId: taskId, diff: { assigneeUserId: newId } });
 
   if (newId !== userId) {
     const u = await db().select({ telegramId: schema.users.telegramId }).from(schema.users).where(eq(schema.users.id, newId)).limit(1);
     if (u[0]) {
-      const t = await loadTask(taskId, workspaceId);
+      const tg = ctx.from!;
+      const lc = await userLang(tg.id, tg.language_code);
+      const tk = await loadTask(taskId, workspaceId);
       await sendMessage(
         u[0].telegramId,
-        `🆕 Task <b>#${taskId}</b> assigned to you.\n${h(t?.title ?? "")}`,
-        { reply_markup: { inline_keyboard: [[{ text: "👁️ View task", callback_data: `t:view:${taskId}` }]] } }
+        t(lc, "task_assigned_dm", { id: String(taskId), title: h(tk?.title ?? "") }),
+        { reply_markup: { inline_keyboard: [[{ text: t(lc, "btn_view_task"), callback_data: `t:view:${taskId}` }]] } }
       ).catch((e) => log.warn("notify reassign failed", { err: String(e) }));
     }
   }
@@ -358,8 +290,7 @@ async function setWatch(ctx: Context, taskId: number, userId: number, on: boolea
   if (on) {
     await db().insert(schema.taskWatchers).values({ taskId, userId }).onConflictDoNothing();
   } else {
-    await db()
-      .delete(schema.taskWatchers)
+    await db().delete(schema.taskWatchers)
       .where(and(eq(schema.taskWatchers.taskId, taskId), eq(schema.taskWatchers.userId, userId)));
   }
   await renderTask(ctx, taskId);
@@ -367,13 +298,15 @@ async function setWatch(ctx: Context, taskId: number, userId: number, on: boolea
 
 async function promptComment(ctx: Context, taskId: number) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const chatId = ctx.chat!.id;
   await setState<AddCommentState>(chatId, tg.id, { flow: "comment", taskId });
-  await ctx.editMessageText(`💬 Send your comment for task #${taskId} (or /cancel):`, { parse_mode: "HTML" });
+  await ctx.editMessageText(t(lc, "comment_prompt", { id: String(taskId) }), { parse_mode: "HTML" });
 }
 
 export async function consumeCommentInput(ctx: Context, state: AddCommentState) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const chatId = ctx.chat!.id;
   const text = ctx.message?.text?.trim();
   if (!text) return;
@@ -382,33 +315,25 @@ export async function consumeCommentInput(ctx: Context, state: AddCommentState) 
     await clearState(chatId, tg.id);
     return;
   }
-  await db().insert(schema.comments).values({
-    taskId: state.taskId,
-    authorId: m.userId,
-    body: text.slice(0, 4000),
-  });
-  await audit({
-    workspaceId: m.workspaceId,
-    actorId: m.userId,
-    action: "comment",
-    entity: "task",
-    entityId: state.taskId,
-  });
-  await notifyWatchers(state.taskId, m.userId, `💬 New comment on <b>#${state.taskId}</b>`);
+  await db().insert(schema.comments).values({ taskId: state.taskId, authorId: m.userId, body: text.slice(0, 4000) });
+  await audit({ workspaceId: m.workspaceId, actorId: m.userId, action: "comment", entity: "task", entityId: state.taskId });
+  await notifyWatchers(state.taskId, m.userId, t(lc, "notify_new_comment", { id: String(state.taskId) }));
   await clearState(chatId, tg.id);
-  await ctx.reply(`✅ Comment added.`);
+  await ctx.reply(t(lc, "comment_added"));
   await renderTask(ctx, state.taskId);
 }
 
 async function promptSubtask(ctx: Context, taskId: number) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const chatId = ctx.chat!.id;
   await setState<AddSubtaskState>(chatId, tg.id, { flow: "subtask", parentId: taskId });
-  await ctx.editMessageText(`➕ Send the subtask title for #${taskId} (or /cancel):`, { parse_mode: "HTML" });
+  await ctx.editMessageText(t(lc, "subtask_prompt", { id: String(taskId) }), { parse_mode: "HTML" });
 }
 
 export async function consumeSubtaskInput(ctx: Context, state: AddSubtaskState) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const chatId = ctx.chat!.id;
   const text = ctx.message?.text?.trim();
   if (!text) return;
@@ -420,65 +345,45 @@ export async function consumeSubtaskInput(ctx: Context, state: AddSubtaskState) 
   const parent = await loadTask(state.parentId, m.workspaceId);
   if (!parent) {
     await clearState(chatId, tg.id);
-    await ctx.reply("Parent task not found.");
+    await ctx.reply(t(lc, "parent_not_found"));
     return;
   }
-  const [child] = await db()
-    .insert(schema.tasks)
-    .values({
-      workspaceId: m.workspaceId,
-      creatorId: m.userId,
-      parentId: state.parentId,
-      title: text.slice(0, 200),
-      priority: parent.priority,
-      status: "open",
-    })
-    .returning({ id: schema.tasks.id });
-  await audit({
-    workspaceId: m.workspaceId,
-    actorId: m.userId,
-    action: "create",
-    entity: "task",
-    entityId: child!.id,
-    diff: { parentId: state.parentId },
-  });
+  const [child] = await db().insert(schema.tasks).values({
+    workspaceId: m.workspaceId, creatorId: m.userId, parentId: state.parentId,
+    title: text.slice(0, 200), priority: parent.priority, status: "open",
+  }).returning({ id: schema.tasks.id });
+  await audit({ workspaceId: m.workspaceId, actorId: m.userId, action: "create", entity: "task", entityId: child!.id, diff: { parentId: state.parentId } });
   await clearState(chatId, tg.id);
-  await ctx.reply(`✅ Subtask <b>#${child!.id}</b> created.`, { parse_mode: "HTML" });
+  await ctx.reply(t(lc, "subtask_created", { id: String(child!.id) }), { parse_mode: "HTML" });
   await renderTask(ctx, state.parentId);
 }
 
 async function startWorkTimer(ctx: Context, taskId: number, userId: number) {
+  const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const r = redis();
   if (!r) {
-    await ctx.answerCallbackQuery({ text: "Timers require Redis." }).catch(() => {});
+    await ctx.answerCallbackQuery({ text: t(lc, "timers_require_redis") }).catch(() => {});
     return;
   }
   await r.set(`timer:${userId}:${taskId}`, Date.now(), { ex: 60 * 60 * 12 });
-  // Also flip task to in_progress if not done
-  await db()
-    .update(schema.tasks)
-    .set({ status: "in_progress", updatedAt: new Date() })
-    .where(eq(schema.tasks.id, taskId));
+  await db().update(schema.tasks).set({ status: "in_progress", updatedAt: new Date() }).where(eq(schema.tasks.id, taskId));
   await renderTask(ctx, taskId);
 }
 
 async function stopWorkTimer(ctx: Context, taskId: number, userId: number, workspaceId: number) {
+  const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const r = redis();
   if (!r) return;
   const startedAt = await r.get<number>(`timer:${userId}:${taskId}`);
   if (!startedAt) {
-    await ctx.answerCallbackQuery({ text: "No timer running." }).catch(() => {});
+    await ctx.answerCallbackQuery({ text: t(lc, "no_timer") }).catch(() => {});
     return;
   }
   const minutes = Math.max(1, Math.floor((Date.now() - Number(startedAt)) / 60000));
   await r.del(`timer:${userId}:${taskId}`);
-  // Append a comment row recording the timer entry
-  await db().insert(schema.comments).values({
-    taskId,
-    authorId: userId,
-    body: `⏱️ Logged ${minutes} min`,
-  });
-  // Increment actual_minutes
+  await db().insert(schema.comments).values({ taskId, authorId: userId, body: `⏱️ +${minutes} min` });
   const current = await db().select({ actual: schema.tasks.actualMinutes }).from(schema.tasks).where(eq(schema.tasks.id, taskId)).limit(1);
   const next = (current[0]?.actual ?? 0) + minutes;
   await db().update(schema.tasks).set({ actualMinutes: next, updatedAt: new Date() }).where(eq(schema.tasks.id, taskId));
@@ -486,17 +391,11 @@ async function stopWorkTimer(ctx: Context, taskId: number, userId: number, works
   await renderTask(ctx, taskId);
 }
 
-// ----- helpers -----
-
 async function loadTask(taskId: number, workspaceId: number) {
-  const r = await db()
-    .select()
-    .from(schema.tasks)
-    .where(and(eq(schema.tasks.id, taskId), eq(schema.tasks.workspaceId, workspaceId)))
-    .limit(1);
+  const r = await db().select().from(schema.tasks)
+    .where(and(eq(schema.tasks.id, taskId), eq(schema.tasks.workspaceId, workspaceId))).limit(1);
   return r[0] ?? null;
 }
-
 async function loadAssignees(taskId: number): Promise<string[]> {
   const rows = await db()
     .select({ first: schema.users.firstName, last: schema.users.lastName, uname: schema.users.telegramUsername })
@@ -505,23 +404,17 @@ async function loadAssignees(taskId: number): Promise<string[]> {
     .where(eq(schema.taskAssignees.taskId, taskId));
   return rows.map((r) => [r.first, r.last].filter(Boolean).join(" ") || (r.uname ? `@${r.uname}` : "user"));
 }
-
 async function loadSubtasks(parentId: number, workspaceId: number) {
-  return db()
-    .select({ id: schema.tasks.id, title: schema.tasks.title, status: schema.tasks.status })
+  return db().select({ id: schema.tasks.id, title: schema.tasks.title, status: schema.tasks.status })
     .from(schema.tasks)
     .where(and(eq(schema.tasks.parentId, parentId), eq(schema.tasks.workspaceId, workspaceId)))
     .limit(20);
 }
-
 async function loadRecentComments(taskId: number) {
   const rows = await db()
     .select({
-      body: schema.comments.body,
-      createdAt: schema.comments.createdAt,
-      first: schema.users.firstName,
-      last: schema.users.lastName,
-      uname: schema.users.telegramUsername,
+      body: schema.comments.body, createdAt: schema.comments.createdAt,
+      first: schema.users.firstName, last: schema.users.lastName, uname: schema.users.telegramUsername,
     })
     .from(schema.comments)
     .innerJoin(schema.users, eq(schema.users.id, schema.comments.authorId))
@@ -529,28 +422,21 @@ async function loadRecentComments(taskId: number) {
     .orderBy(desc(schema.comments.createdAt))
     .limit(3);
   return rows.reverse().map((r) => ({
-    body: r.body,
-    createdAt: r.createdAt,
+    body: r.body, createdAt: r.createdAt,
     author: [r.first, r.last].filter(Boolean).join(" ") || (r.uname ? `@${r.uname}` : "user"),
   }));
 }
-
 async function isWatching(taskId: number, userId: number): Promise<boolean> {
-  const r = await db()
-    .select({ taskId: schema.taskWatchers.taskId })
-    .from(schema.taskWatchers)
-    .where(and(eq(schema.taskWatchers.taskId, taskId), eq(schema.taskWatchers.userId, userId)))
-    .limit(1);
+  const r = await db().select({ taskId: schema.taskWatchers.taskId }).from(schema.taskWatchers)
+    .where(and(eq(schema.taskWatchers.taskId, taskId), eq(schema.taskWatchers.userId, userId))).limit(1);
   return !!r[0];
 }
-
 async function currentTimerForUser(taskId: number, userId: number): Promise<number | null> {
   const r = redis();
   if (!r) return null;
   const v = await r.get<number>(`timer:${userId}:${taskId}`);
   return v ? Number(v) : null;
 }
-
 async function notifyWatchers(taskId: number, exceptUserId: number, text: string) {
   try {
     const rows = await db()
@@ -561,23 +447,20 @@ async function notifyWatchers(taskId: number, exceptUserId: number, text: string
     for (const w of rows) {
       if (w.userId === exceptUserId) continue;
       await sendMessage(w.telegramId, text, {
-        reply_markup: { inline_keyboard: [[{ text: "👁️ View task", callback_data: `t:view:${taskId}` }]] },
+        reply_markup: { inline_keyboard: [[{ text: "👁️", callback_data: `t:view:${taskId}` }]] },
       }).catch(() => {});
     }
   } catch (e) {
     log.warn("notifyWatchers failed", { err: String(e) });
   }
 }
-
 async function replyOrEdit(ctx: Context, text: string, extra?: Record<string, unknown>) {
   const opts = { parse_mode: "HTML" as const, ...extra };
   if (ctx.callbackQuery?.message) {
     try {
       await ctx.editMessageText(text, opts);
       return;
-    } catch {
-      // fall through
-    }
+    } catch { /* noop */ }
   }
   await ctx.reply(text, opts);
 }

@@ -1,22 +1,9 @@
 import type { InlineKeyboardButton } from "grammy/types";
-
-/**
- * Reusable inline-keyboard builders.
- *
- * callback_data is limited to 64 bytes by Telegram. We use compact
- * colon-separated namespaces:  ns:verb:arg1:arg2 ...
- * Namespaces:
- *   t   = task action          t:done:123, t:reassign:123, t:prio:123:p1
- *   nt  = new-task wizard      nt:prio:p1, nt:due:tomorrow, nt:asgn:42
- *   lst = list/pagination      lst:my:p:2, lst:my:f:today, lst:my:s:due
- *   set = settings             set:lang:fa, set:digest:on
- *   lang = language picker     lang:fa, lang:en
- *   q   = question/answer      q:answer:42
- *   noop = swallow              noop
- */
+import { t } from "@/i18n";
 
 export type Btn = InlineKeyboardButton;
 export const noop: Btn = { text: " ", callback_data: "noop" };
+export type LC = string;
 
 export function row(...btns: Btn[]): Btn[] { return btns; }
 export function grid(buttons: Btn[], cols: number): Btn[][] {
@@ -26,43 +13,43 @@ export function grid(buttons: Btn[], cols: number): Btn[][] {
 }
 
 // ---------- Wizard keyboards ----------
-export function priorityKb(): Btn[][] {
+export function priorityKb(lc: LC): Btn[][] {
   return [
     [
-      { text: "🔴 P0 — Urgent", callback_data: "nt:prio:p0" },
-      { text: "🟠 P1 — High", callback_data: "nt:prio:p1" },
+      { text: t(lc, "btn_p0"), callback_data: "nt:prio:p0" },
+      { text: t(lc, "btn_p1"), callback_data: "nt:prio:p1" },
     ],
     [
-      { text: "🟡 P2 — Normal", callback_data: "nt:prio:p2" },
-      { text: "🟢 P3 — Low", callback_data: "nt:prio:p3" },
+      { text: t(lc, "btn_p2"), callback_data: "nt:prio:p2" },
+      { text: t(lc, "btn_p3"), callback_data: "nt:prio:p3" },
     ],
-    [navRow("nt", { skip: false, back: true })].flat(),
+    navRow("nt", lc, { back: true }),
   ];
 }
 
-export function dueDateKb(): Btn[][] {
+export function dueDateKb(lc: LC): Btn[][] {
   return [
     [
-      { text: "📅 Today", callback_data: "nt:due:today" },
-      { text: "📅 Tomorrow", callback_data: "nt:due:tomorrow" },
+      { text: t(lc, "btn_today"), callback_data: "nt:due:today" },
+      { text: t(lc, "btn_tomorrow"), callback_data: "nt:due:tomorrow" },
     ],
     [
-      { text: "📅 In 3 days", callback_data: "nt:due:3d" },
-      { text: "📅 This Friday", callback_data: "nt:due:fri" },
+      { text: t(lc, "btn_in3d"), callback_data: "nt:due:3d" },
+      { text: t(lc, "btn_thisfri"), callback_data: "nt:due:fri" },
     ],
     [
-      { text: "📅 Next Monday", callback_data: "nt:due:nextmon" },
-      { text: "📅 In 2 weeks", callback_data: "nt:due:2w" },
+      { text: t(lc, "btn_nextmon"), callback_data: "nt:due:nextmon" },
+      { text: t(lc, "btn_in2w"), callback_data: "nt:due:2w" },
     ],
     [
-      { text: "✏️ Custom date", callback_data: "nt:due:custom" },
-      { text: "⏭️ No due date", callback_data: "nt:due:none" },
+      { text: t(lc, "btn_custom_date"), callback_data: "nt:due:custom" },
+      { text: t(lc, "btn_no_due"), callback_data: "nt:due:none" },
     ],
-    navRow("nt", { skip: false, back: true }),
+    navRow("nt", lc, { back: true }),
   ];
 }
 
-export function dueTimeKb(): Btn[][] {
+export function dueTimeKb(lc: LC): Btn[][] {
   return [
     [
       { text: "🕘 9:00", callback_data: "nt:time:09:00" },
@@ -75,111 +62,119 @@ export function dueTimeKb(): Btn[][] {
       { text: "🕘 21:00", callback_data: "nt:time:21:00" },
     ],
     [
-      { text: "🌅 Morning (09:00)", callback_data: "nt:time:09:00" },
-      { text: "🌃 End of day (23:59)", callback_data: "nt:time:23:59" },
+      { text: t(lc, "btn_morning"), callback_data: "nt:time:09:00" },
+      { text: t(lc, "btn_eod"), callback_data: "nt:time:23:59" },
     ],
     [
-      { text: "✏️ Custom time", callback_data: "nt:time:custom" },
+      { text: t(lc, "btn_custom_time"), callback_data: "nt:time:custom" },
     ],
-    navRow("nt", { skip: false, back: true }),
+    navRow("nt", lc, { back: true }),
   ];
 }
 
-export function recurrenceKb(): Btn[][] {
+export function recurrenceKb(lc: LC): Btn[][] {
   return [
     [
-      { text: "🚫 None (one-off)", callback_data: "nt:rec:none" },
-      { text: "📆 Daily", callback_data: "nt:rec:daily" },
+      { text: t(lc, "btn_rec_none"), callback_data: "nt:rec:none" },
+      { text: t(lc, "btn_rec_daily"), callback_data: "nt:rec:daily" },
     ],
     [
-      { text: "📅 Weekdays", callback_data: "nt:rec:weekdays" },
-      { text: "📅 Weekly", callback_data: "nt:rec:weekly" },
+      { text: t(lc, "btn_rec_weekdays"), callback_data: "nt:rec:weekdays" },
+      { text: t(lc, "btn_rec_weekly"), callback_data: "nt:rec:weekly" },
     ],
     [
-      { text: "📅 Bi-weekly", callback_data: "nt:rec:biweekly" },
-      { text: "📅 Monthly", callback_data: "nt:rec:monthly" },
+      { text: t(lc, "btn_rec_biweekly"), callback_data: "nt:rec:biweekly" },
+      { text: t(lc, "btn_rec_monthly"), callback_data: "nt:rec:monthly" },
     ],
-    navRow("nt", { skip: false, back: true }),
+    navRow("nt", lc, { back: true }),
   ];
 }
 
-export function assigneeKb(members: { id: number; name: string }[], page = 0): Btn[][] {
+export function projectPickerKb(lc: LC, projects: { id: number; name: string }[]): Btn[][] {
+  const rows: Btn[][] = [];
+  rows.push([{ text: t(lc, "proj_btn_no_project"), callback_data: "nt:proj:none" }]);
+  for (const p of projects.slice(0, 12)) {
+    rows.push([{ text: `🗂️ ${p.name}`, callback_data: `nt:proj:${p.id}` }]);
+  }
+  rows.push(navRow("nt", lc, { back: true }));
+  return rows;
+}
+
+export function assigneeKb(lc: LC, members: { id: number; name: string }[], page = 0): Btn[][] {
   const PER_PAGE = 6;
   const start = page * PER_PAGE;
   const slice = members.slice(start, start + PER_PAGE);
   const rows: Btn[][] = [];
   rows.push([
-    { text: "🙋 Assign to me", callback_data: "nt:asgn:self" },
-    { text: "👥 Unassigned", callback_data: "nt:asgn:none" },
+    { text: t(lc, "btn_assign_self"), callback_data: "nt:asgn:self" },
+    { text: t(lc, "btn_assign_none"), callback_data: "nt:asgn:none" },
   ]);
   for (const m of slice) rows.push([{ text: `👤 ${m.name}`, callback_data: `nt:asgn:${m.id}` }]);
   const nav: Btn[] = [];
-  if (start > 0) nav.push({ text: "⬅️ Prev", callback_data: `nt:asgnpg:${page - 1}` });
-  if (start + PER_PAGE < members.length) nav.push({ text: "Next ➡️", callback_data: `nt:asgnpg:${page + 1}` });
+  if (start > 0) nav.push({ text: t(lc, "btn_prev"), callback_data: `nt:asgnpg:${page - 1}` });
+  if (start + PER_PAGE < members.length) nav.push({ text: t(lc, "btn_next"), callback_data: `nt:asgnpg:${page + 1}` });
   if (nav.length) rows.push(nav);
-  rows.push(navRow("nt", { skip: false, back: true }));
+  rows.push(navRow("nt", lc, { back: true }));
   return rows;
 }
 
-export function confirmKb(): Btn[][] {
+export function confirmKb(lc: LC): Btn[][] {
   return [
+    [{ text: t(lc, "btn_create"), callback_data: "nt:save" }],
     [
-      { text: "✅ Create task", callback_data: "nt:save" },
+      { text: t(lc, "btn_edit_title"), callback_data: "nt:edit:title" },
+      { text: t(lc, "btn_edit_desc"), callback_data: "nt:edit:desc" },
     ],
     [
-      { text: "✏️ Edit title", callback_data: "nt:edit:title" },
-      { text: "✏️ Edit desc", callback_data: "nt:edit:desc" },
+      { text: t(lc, "btn_edit_prio"), callback_data: "nt:edit:prio" },
+      { text: t(lc, "btn_edit_due"), callback_data: "nt:edit:due" },
     ],
     [
-      { text: "✏️ Priority", callback_data: "nt:edit:prio" },
-      { text: "✏️ Due", callback_data: "nt:edit:due" },
+      { text: t(lc, "btn_edit_asgn"), callback_data: "nt:edit:asgn" },
+      { text: t(lc, "btn_edit_rec"), callback_data: "nt:edit:rec" },
     ],
-    [
-      { text: "✏️ Assignee", callback_data: "nt:edit:asgn" },
-      { text: "✏️ Recurrence", callback_data: "nt:edit:rec" },
-    ],
-    [{ text: "❌ Cancel", callback_data: "nt:cancel" }],
+    [{ text: t(lc, "cancel"), callback_data: "nt:cancel" }],
   ];
 }
 
-// ---------- Task action keyboards ----------
-export function taskActionsKb(taskId: number, status: string, watching: boolean): Btn[][] {
+// ---------- Task action keyboard ----------
+export function taskActionsKb(lc: LC, taskId: number, status: string, watching: boolean): Btn[][] {
   const id = taskId;
   const statusRow: Btn[] = [];
-  if (status !== "in_progress") statusRow.push({ text: "▶️ Start", callback_data: `t:start:${id}` });
-  if (status === "in_progress") statusRow.push({ text: "⏸️ Block", callback_data: `t:block:${id}` });
-  if (status !== "in_review" && status !== "done") statusRow.push({ text: "👀 Review", callback_data: `t:review:${id}` });
-  if (status !== "done") statusRow.push({ text: "✅ Done", callback_data: `t:done:${id}` });
+  if (status !== "in_progress") statusRow.push({ text: t(lc, "btn_start"), callback_data: `t:start:${id}` });
+  if (status === "in_progress") statusRow.push({ text: t(lc, "btn_block"), callback_data: `t:block:${id}` });
+  if (status !== "in_review" && status !== "done") statusRow.push({ text: t(lc, "btn_review"), callback_data: `t:review:${id}` });
+  if (status !== "done") statusRow.push({ text: t(lc, "btn_done"), callback_data: `t:done:${id}` });
   return [
-    statusRow.length ? statusRow : [{ text: "🔁 Reopen", callback_data: `t:reopen:${id}` }],
+    statusRow.length ? statusRow : [{ text: t(lc, "btn_reopen"), callback_data: `t:reopen:${id}` }],
     [
-      { text: "👤 Reassign", callback_data: `t:reassign:${id}` },
-      { text: "📅 Reschedule", callback_data: `t:resched:${id}` },
+      { text: t(lc, "btn_reassign"), callback_data: `t:reassign:${id}` },
+      { text: t(lc, "btn_resched"), callback_data: `t:resched:${id}` },
     ],
     [
-      { text: "⚡ Priority", callback_data: `t:prio:${id}` },
-      { text: "🏷️ Labels", callback_data: `t:lbl:${id}` },
+      { text: t(lc, "btn_priority"), callback_data: `t:prio:${id}` },
+      { text: t(lc, "btn_labels"), callback_data: `t:lbl:${id}` },
     ],
     [
-      { text: "💬 Comment", callback_data: `t:cmt:${id}` },
-      { text: "➕ Subtask", callback_data: `t:sub:${id}` },
+      { text: t(lc, "btn_comment"), callback_data: `t:cmt:${id}` },
+      { text: t(lc, "btn_subtask"), callback_data: `t:sub:${id}` },
     ],
     [
-      { text: "⏰ Snooze", callback_data: `t:snz:${id}` },
-      { text: watching ? "🔕 Unwatch" : "👁️ Watch", callback_data: `t:${watching ? "unwatch" : "watch"}:${id}` },
+      { text: t(lc, "btn_snooze"), callback_data: `t:snz:${id}` },
+      { text: watching ? t(lc, "btn_unwatch") : t(lc, "btn_watch"), callback_data: `t:${watching ? "unwatch" : "watch"}:${id}` },
     ],
     [
-      { text: "⏱️ Start timer", callback_data: `t:wstart:${id}` },
-      { text: "⏹️ Stop timer", callback_data: `t:wstop:${id}` },
+      { text: t(lc, "btn_timer_start"), callback_data: `t:wstart:${id}` },
+      { text: t(lc, "btn_timer_stop"), callback_data: `t:wstop:${id}` },
     ],
     [
-      { text: "🔄 Refresh", callback_data: `t:view:${id}` },
-      { text: "❌ Cancel task", callback_data: `t:tcancel:${id}` },
+      { text: t(lc, "refresh"), callback_data: `t:view:${id}` },
+      { text: t(lc, "btn_tcancel"), callback_data: `t:tcancel:${id}` },
     ],
   ];
 }
 
-export function priorityChooseKb(taskId: number): Btn[][] {
+export function priorityChooseKb(lc: LC, taskId: number): Btn[][] {
   return [
     [
       { text: "🔴 P0", callback_data: `t:setprio:${taskId}:p0` },
@@ -187,59 +182,60 @@ export function priorityChooseKb(taskId: number): Btn[][] {
       { text: "🟡 P2", callback_data: `t:setprio:${taskId}:p2` },
       { text: "🟢 P3", callback_data: `t:setprio:${taskId}:p3` },
     ],
-    [{ text: "⬅️ Back", callback_data: `t:view:${taskId}` }],
+    [{ text: t(lc, "btn_back"), callback_data: `t:view:${taskId}` }],
   ];
 }
 
-export function snoozeKb(taskId: number): Btn[][] {
+export function snoozeKb(lc: LC, taskId: number): Btn[][] {
   return [
     [
-      { text: "⏰ +1 hour", callback_data: `t:setsnz:${taskId}:1h` },
-      { text: "⏰ +3 hours", callback_data: `t:setsnz:${taskId}:3h` },
+      { text: t(lc, "btn_in_1h"), callback_data: `t:setsnz:${taskId}:1h` },
+      { text: t(lc, "btn_in_3h"), callback_data: `t:setsnz:${taskId}:3h` },
     ],
     [
-      { text: "📅 Tomorrow 9am", callback_data: `t:setsnz:${taskId}:tom9` },
-      { text: "📅 Next Monday", callback_data: `t:setsnz:${taskId}:mon9` },
+      { text: t(lc, "btn_tom_9"), callback_data: `t:setsnz:${taskId}:tom9` },
+      { text: t(lc, "btn_mon_9"), callback_data: `t:setsnz:${taskId}:mon9` },
     ],
-    [{ text: "⬅️ Back", callback_data: `t:view:${taskId}` }],
+    [{ text: t(lc, "btn_back"), callback_data: `t:view:${taskId}` }],
   ];
 }
 
-export function reschedKb(taskId: number): Btn[][] {
+export function reschedKb(lc: LC, taskId: number): Btn[][] {
   return [
     [
-      { text: "📅 Today", callback_data: `t:setdue:${taskId}:today` },
-      { text: "📅 Tomorrow", callback_data: `t:setdue:${taskId}:tomorrow` },
+      { text: t(lc, "btn_today"), callback_data: `t:setdue:${taskId}:today` },
+      { text: t(lc, "btn_tomorrow"), callback_data: `t:setdue:${taskId}:tomorrow` },
     ],
     [
-      { text: "📅 In 3 days", callback_data: `t:setdue:${taskId}:3d` },
-      { text: "📅 This Friday", callback_data: `t:setdue:${taskId}:fri` },
+      { text: t(lc, "btn_in3d"), callback_data: `t:setdue:${taskId}:3d` },
+      { text: t(lc, "btn_thisfri"), callback_data: `t:setdue:${taskId}:fri` },
     ],
     [
-      { text: "📅 Next Monday", callback_data: `t:setdue:${taskId}:nextmon` },
-      { text: "🚫 Clear due", callback_data: `t:setdue:${taskId}:none` },
+      { text: t(lc, "btn_nextmon"), callback_data: `t:setdue:${taskId}:nextmon` },
+      { text: t(lc, "btn_clear_due"), callback_data: `t:setdue:${taskId}:none` },
     ],
-    [{ text: "⬅️ Back", callback_data: `t:view:${taskId}` }],
+    [{ text: t(lc, "btn_back"), callback_data: `t:view:${taskId}` }],
   ];
 }
 
-export function reassignKb(taskId: number, members: { id: number; name: string }[], page = 0): Btn[][] {
+export function reassignKb(lc: LC, taskId: number, members: { id: number; name: string }[], page = 0): Btn[][] {
   const PER_PAGE = 6;
   const start = page * PER_PAGE;
   const slice = members.slice(start, start + PER_PAGE);
   const rows: Btn[][] = [];
-  rows.push([{ text: "🙋 To me", callback_data: `t:setasgn:${taskId}:self` }]);
+  rows.push([{ text: t(lc, "btn_to_me"), callback_data: `t:setasgn:${taskId}:self` }]);
   for (const m of slice) rows.push([{ text: `👤 ${m.name}`, callback_data: `t:setasgn:${taskId}:${m.id}` }]);
   const nav: Btn[] = [];
-  if (start > 0) nav.push({ text: "⬅️ Prev", callback_data: `t:rapg:${taskId}:${page - 1}` });
-  if (start + PER_PAGE < members.length) nav.push({ text: "Next ➡️", callback_data: `t:rapg:${taskId}:${page + 1}` });
+  if (start > 0) nav.push({ text: t(lc, "btn_prev"), callback_data: `t:rapg:${taskId}:${page - 1}` });
+  if (start + PER_PAGE < members.length) nav.push({ text: t(lc, "btn_next"), callback_data: `t:rapg:${taskId}:${page + 1}` });
   if (nav.length) rows.push(nav);
-  rows.push([{ text: "⬅️ Back", callback_data: `t:view:${taskId}` }]);
+  rows.push([{ text: t(lc, "btn_back"), callback_data: `t:view:${taskId}` }]);
   return rows;
 }
 
 // ---------- Task list keyboard ----------
 export function taskListKb(
+  lc: LC,
   tasks: { id: number; title: string }[],
   filter: string,
   sort: string,
@@ -248,39 +244,38 @@ export function taskListKb(
 ): Btn[][] {
   const rows: Btn[][] = [];
 
-  // Filter row
   rows.push([
-    btnToggle("📥 All", filter === "all", `lst:my:f:all`),
-    btnToggle("📅 Today", filter === "today", `lst:my:f:today`),
-    btnToggle("🚨 Overdue", filter === "overdue", `lst:my:f:overdue`),
+    btnToggle(t(lc, "list_filter_all"), filter === "all", `lst:my:f:all`),
+    btnToggle(t(lc, "list_filter_today"), filter === "today", `lst:my:f:today`),
+    btnToggle(t(lc, "list_filter_overdue"), filter === "overdue", `lst:my:f:overdue`),
   ]);
   rows.push([
-    btnToggle("🗓️ Week", filter === "week", `lst:my:f:week`),
-    btnToggle("✅ Done", filter === "done", `lst:my:f:done`),
-    btnToggle("👁️ Watching", filter === "watching", `lst:my:f:watching`),
+    btnToggle(t(lc, "list_filter_week"), filter === "week", `lst:my:f:week`),
+    btnToggle(t(lc, "list_filter_done"), filter === "done", `lst:my:f:done`),
+    btnToggle(t(lc, "list_filter_watching"), filter === "watching", `lst:my:f:watching`),
   ]);
 
-  // Task rows: each task is a button to view detail
   for (const tk of tasks) {
     const label = tk.title.length > 50 ? tk.title.slice(0, 47) + "…" : tk.title;
     rows.push([{ text: `#${tk.id} · ${label}`, callback_data: `t:view:${tk.id}` }]);
   }
 
-  // Sort row
   rows.push([
-    btnToggle("⏰ Due", sort === "due", `lst:my:s:due`),
-    btnToggle("⚡ Priority", sort === "prio", `lst:my:s:prio`),
-    btnToggle("🆕 Newest", sort === "new", `lst:my:s:new`),
+    btnToggle(t(lc, "list_sort_due"), sort === "due", `lst:my:s:due`),
+    btnToggle(t(lc, "list_sort_prio"), sort === "prio", `lst:my:s:prio`),
+    btnToggle(t(lc, "list_sort_new"), sort === "new", `lst:my:s:new`),
   ]);
 
-  // Pagination row
   const nav: Btn[] = [];
-  if (page > 0) nav.push({ text: "⬅️ Prev", callback_data: `lst:my:p:${page - 1}` });
+  if (page > 0) nav.push({ text: t(lc, "btn_prev"), callback_data: `lst:my:p:${page - 1}` });
   nav.push({ text: `· ${page + 1} ·`, callback_data: "noop" });
-  if (hasNext) nav.push({ text: "Next ➡️", callback_data: `lst:my:p:${page + 1}` });
+  if (hasNext) nav.push({ text: t(lc, "btn_next"), callback_data: `lst:my:p:${page + 1}` });
   rows.push(nav);
 
-  rows.push([{ text: "➕ New task", callback_data: "nt:new" }, { text: "🔄 Refresh", callback_data: `lst:my:p:${page}` }]);
+  rows.push([
+    { text: t(lc, "btn_new_task"), callback_data: "nt:new" },
+    { text: t(lc, "refresh"), callback_data: `lst:my:p:${page}` },
+  ]);
   return rows;
 }
 
@@ -289,36 +284,39 @@ function btnToggle(text: string, active: boolean, cb: string): Btn {
 }
 
 // ---------- Settings keyboard ----------
-export function settingsKb(): Btn[][] {
+export function settingsKb(lc: LC): Btn[][] {
   return [
-    [{ text: "🌐 Language", callback_data: "set:menu:lang" }],
-    [{ text: "🔔 Notifications", callback_data: "set:menu:notif" }],
-    [{ text: "🌙 Quiet hours", callback_data: "set:menu:quiet" }],
-    [{ text: "🕒 Timezone", callback_data: "set:menu:tz" }],
-    [{ text: "✖️ Close", callback_data: "set:close" }],
+    [{ text: t(lc, "set_btn_lang"), callback_data: "set:menu:lang" }],
+    [{ text: t(lc, "set_btn_notif"), callback_data: "set:menu:notif" }],
+    [{ text: t(lc, "set_btn_quiet"), callback_data: "set:menu:quiet" }],
+    [{ text: t(lc, "set_btn_tz"), callback_data: "set:menu:tz" }],
+    [{ text: t(lc, "btn_close"), callback_data: "set:close" }],
   ];
 }
 
-export function languagePickerKb(): Btn[][] {
+export function languagePickerKb(lc: LC): Btn[][] {
   return [
     [
       { text: "🇮🇷 فارسی", callback_data: "lang:fa" },
       { text: "🇬🇧 English", callback_data: "lang:en" },
     ],
-    [{ text: "⬅️ Back", callback_data: "set:menu:root" }],
+    [{ text: t(lc, "btn_back"), callback_data: "set:menu:root" }],
   ];
 }
 
-export function notifKb(prefs: { digestEnabled: boolean }): Btn[][] {
+export function notifKb(lc: LC, prefs: { digestEnabled: boolean }): Btn[][] {
   return [
     [
-      { text: prefs.digestEnabled ? "✅ Daily digest" : "⬜ Daily digest", callback_data: "set:notif:digest" },
+      {
+        text: `${prefs.digestEnabled ? "✅" : "⬜"} ${t(lc, "set_notif_digest")}`,
+        callback_data: "set:notif:digest",
+      },
     ],
-    [{ text: "⬅️ Back", callback_data: "set:menu:root" }],
+    [{ text: t(lc, "btn_back"), callback_data: "set:menu:root" }],
   ];
 }
 
-export function quietHoursKb(): Btn[][] {
+export function quietHoursKb(lc: LC): Btn[][] {
   return [
     [
       { text: "🌙 22:00 → 08:00", callback_data: "set:quiet:22-08" },
@@ -326,17 +324,17 @@ export function quietHoursKb(): Btn[][] {
     ],
     [
       { text: "🌙 21:00 → 09:00", callback_data: "set:quiet:21-09" },
-      { text: "☀️ Disable", callback_data: "set:quiet:off" },
+      { text: t(lc, "set_quiet_disable"), callback_data: "set:quiet:off" },
     ],
-    [{ text: "⬅️ Back", callback_data: "set:menu:root" }],
+    [{ text: t(lc, "btn_back"), callback_data: "set:menu:root" }],
   ];
 }
 
 // ---------- Helpers ----------
-export function navRow(ns: string, opts: { skip?: boolean; back?: boolean; cancel?: boolean } = {}): Btn[] {
+export function navRow(ns: string, lc: LC, opts: { skip?: boolean; back?: boolean; cancel?: boolean } = {}): Btn[] {
   const r: Btn[] = [];
-  if (opts.back) r.push({ text: "⬅️ Back", callback_data: `${ns}:back` });
-  if (opts.skip) r.push({ text: "⏭️ Skip", callback_data: `${ns}:skip` });
-  r.push({ text: "❌ Cancel", callback_data: `${ns}:cancel` });
+  if (opts.back) r.push({ text: t(lc, "back"), callback_data: `${ns}:back` });
+  if (opts.skip) r.push({ text: t(lc, "skip"), callback_data: `${ns}:skip` });
+  r.push({ text: t(lc, "cancel"), callback_data: `${ns}:cancel` });
   return r;
 }

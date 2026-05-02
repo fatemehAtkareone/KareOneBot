@@ -8,6 +8,8 @@ import { h, sendMessage } from "@/lib/telegram";
 import { audit } from "@/lib/audit";
 import { displayName } from "@/lib/users";
 import { log } from "@/lib/logger";
+import { t } from "@/i18n";
+import { userLang } from "@/lib/locale";
 import {
   priorityKb,
   dueDateKb,
@@ -15,6 +17,7 @@ import {
   recurrenceKb,
   assigneeKb,
   confirmKb,
+  projectPickerKb,
 } from "@/lib/keyboards";
 
 export type WizardStep =
@@ -26,6 +29,7 @@ export type WizardStep =
   | "duecustom"
   | "timecustom"
   | "assignee"
+  | "project"
   | "recurrence"
   | "confirm";
 
@@ -36,9 +40,10 @@ export interface NewTaskWizardState {
     title?: string;
     description?: string;
     priority?: "p0" | "p1" | "p2" | "p3";
-    dueDate?: string; // YYYY-MM-DD in workspace tz
-    dueTime?: string; // HH:mm
+    dueDate?: string;
+    dueTime?: string;
     assigneeUserId?: number | "self" | "none";
+    projectId?: number | "none";
     recurrenceRule?: string;
   };
   assigneePage?: number;
@@ -47,28 +52,25 @@ export interface NewTaskWizardState {
 
 const TZ = "Asia/Tehran";
 
-const PRIORITY_LABEL: Record<string, string> = {
-  p0: "🔴 P0 — Urgent",
-  p1: "🟠 P1 — High",
-  p2: "🟡 P2 — Normal",
-  p3: "🟢 P3 — Low",
+const PRIORITY_KEYS: Record<string, string> = {
+  p0: "btn_p0", p1: "btn_p1", p2: "btn_p2", p3: "btn_p3",
 };
 
-const RECURRENCE_RULES: Record<string, { rule: string | null; label: string }> = {
-  none: { rule: null, label: "None (one-off)" },
-  daily: { rule: "FREQ=DAILY", label: "Daily" },
-  weekdays: { rule: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,SA", label: "Weekdays (Sat–Thu)" },
-  weekly: { rule: "FREQ=WEEKLY", label: "Weekly" },
-  biweekly: { rule: "FREQ=WEEKLY;INTERVAL=2", label: "Bi-weekly" },
-  monthly: { rule: "FREQ=MONTHLY", label: "Monthly" },
+const RECURRENCE_RULES: Record<string, { rule: string | null; labelKey: string }> = {
+  none: { rule: null, labelKey: "rec_label_none" },
+  daily: { rule: "FREQ=DAILY", labelKey: "rec_label_daily" },
+  weekdays: { rule: "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,SA", labelKey: "rec_label_weekdays" },
+  weekly: { rule: "FREQ=WEEKLY", labelKey: "rec_label_weekly" },
+  biweekly: { rule: "FREQ=WEEKLY;INTERVAL=2", labelKey: "rec_label_biweekly" },
+  monthly: { rule: "FREQ=MONTHLY", labelKey: "rec_label_monthly" },
 };
 
-/** Entry: /newtask command */
 export async function startWizard(ctx: Context) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const m = await getMembershipByTelegramId(tg.id);
   if (!m) {
-    await ctx.reply("You're not part of any workspace yet. Ask your admin for an invite link.");
+    await ctx.reply(t(lc, "not_member"));
     return;
   }
   const chatId = ctx.chat!.id;
@@ -79,15 +81,12 @@ export async function startWizard(ctx: Context) {
     workspaceId: m.workspaceId,
   };
   await setState(chatId, tg.id, state);
-  await ctx.reply(
-    `📝 <b>Step 1 of 7 — Title</b>\nWhat is the task about? Send a short title.`,
-    { parse_mode: "HTML" }
-  );
+  await ctx.reply(t(lc, "wizard_title_step"), { parse_mode: "HTML" });
 }
 
-/** Free-text input handler — invoked by router when wizard state present and message is plain text */
 export async function handleTextInput(ctx: Context, state: NewTaskWizardState) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const chatId = ctx.chat!.id;
   const text = ctx.message?.text?.trim() ?? "";
 
@@ -97,51 +96,46 @@ export async function handleTextInput(ctx: Context, state: NewTaskWizardState) {
       state.data.title = text.slice(0, 200);
       state.step = "desc";
       await setState(chatId, tg.id, state);
-      await ctx.reply(
-        `📝 <b>Step 2 of 7 — Description</b>\nAdd details, or tap Skip.`,
-        {
-          parse_mode: "HTML",
-          reply_markup: { inline_keyboard: [[{ text: "⏭️ Skip", callback_data: "nt:descskip" }]] },
-        }
-      );
+      await ctx.reply(t(lc, "wizard_desc_step"), {
+        parse_mode: "HTML",
+        reply_markup: { inline_keyboard: [[{ text: t(lc, "skip"), callback_data: "nt:descskip" }]] },
+      });
       return;
     case "desc":
       state.data.description = text.slice(0, 4000);
-      await advanceToPriority(ctx, state);
+      await advanceToPriority(ctx, lc, state);
       return;
     case "duecustom": {
       const parsed = DateTime.fromFormat(text, "yyyy-LL-dd", { zone: TZ });
       if (!parsed.isValid) {
-        await ctx.reply("Invalid date. Format: <code>YYYY-MM-DD</code> (e.g. 2026-05-15).", { parse_mode: "HTML" });
+        await ctx.reply(t(lc, "wizard_invalid_date"), { parse_mode: "HTML" });
         return;
       }
       state.data.dueDate = parsed.toFormat("yyyy-LL-dd");
-      await advanceToTime(ctx, state);
+      await advanceToTime(ctx, lc, state);
       return;
     }
     case "timecustom": {
       const m = text.match(/^(\d{1,2})[:.](\d{2})$/);
       if (!m) {
-        await ctx.reply("Invalid time. Format: <code>HH:MM</code> (e.g. 17:30).", { parse_mode: "HTML" });
+        await ctx.reply(t(lc, "wizard_invalid_time"), { parse_mode: "HTML" });
         return;
       }
       state.data.dueTime = `${m[1]!.padStart(2, "0")}:${m[2]}`;
-      await advanceToAssignee(ctx, state);
+      await advanceToAssignee(ctx, lc, state);
       return;
     }
     default:
-      // Ignore stray text in non-input steps
       return;
   }
 }
 
-/** Callback handler — invoked by router when callback_data starts with "nt:" */
 export async function handleCallback(ctx: Context, parts: string[]) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const chatId = ctx.chat!.id;
   const state = await getState<NewTaskWizardState>(chatId, tg.id);
 
-  // Allow the very first "nt:new" entry without any pre-existing state
   if (parts[0] === "new") {
     await ctx.answerCallbackQuery().catch(() => {});
     await startWizard(ctx);
@@ -149,7 +143,7 @@ export async function handleCallback(ctx: Context, parts: string[]) {
   }
 
   if (!state || state.flow !== "newtask") {
-    await ctx.answerCallbackQuery({ text: "Wizard expired. Send /newtask to start over." }).catch(() => {});
+    await ctx.answerCallbackQuery({ text: t(lc, "wizard_expired") }).catch(() => {});
     return;
   }
 
@@ -159,36 +153,36 @@ export async function handleCallback(ctx: Context, parts: string[]) {
   switch (verb) {
     case "cancel":
       await clearState(chatId, tg.id);
-      await editOrReply(ctx, "❌ Task creation cancelled.");
+      await editOrReply(ctx, t(lc, "wizard_cancelled"));
       return;
     case "back":
-      await goBack(ctx, state);
+      await goBack(ctx, lc, state);
       return;
     case "descskip":
       state.data.description = undefined;
-      await advanceToPriority(ctx, state);
+      await advanceToPriority(ctx, lc, state);
       return;
     case "prio":
       state.data.priority = parts[1] as NewTaskWizardState["data"]["priority"];
       await setState(chatId, tg.id, state);
-      await advanceToDueDate(ctx, state);
+      await advanceToDueDate(ctx, lc, state);
       return;
     case "due": {
       const v = parts[1]!;
       if (v === "none") {
         state.data.dueDate = undefined;
         state.data.dueTime = undefined;
-        await advanceToAssignee(ctx, state);
+        await advanceToAssignee(ctx, lc, state);
         return;
       }
       if (v === "custom") {
         state.step = "duecustom";
         await setState(chatId, tg.id, state);
-        await editOrReply(ctx, "Send the due date as <code>YYYY-MM-DD</code>:");
+        await editOrReply(ctx, t(lc, "wizard_send_date"));
         return;
       }
       state.data.dueDate = computePresetDate(v);
-      await advanceToTime(ctx, state);
+      await advanceToTime(ctx, lc, state);
       return;
     }
     case "time": {
@@ -196,44 +190,45 @@ export async function handleCallback(ctx: Context, parts: string[]) {
       if (v === "custom") {
         state.step = "timecustom";
         await setState(chatId, tg.id, state);
-        await editOrReply(ctx, "Send the time as <code>HH:MM</code>:");
+        await editOrReply(ctx, t(lc, "wizard_send_time"));
         return;
       }
-      // v is "HH:00" because the data path was nt:time:HH:00
       state.data.dueTime = `${parts[1]}:${parts[2] ?? "00"}`;
-      await advanceToAssignee(ctx, state);
+      await advanceToAssignee(ctx, lc, state);
       return;
     }
     case "asgn": {
       const v = parts[1]!;
       if (v === "self" || v === "none") state.data.assigneeUserId = v;
       else state.data.assigneeUserId = Number(v);
-      await advanceToRecurrence(ctx, state);
+      await advanceToProject(ctx, lc, state);
       return;
     }
     case "asgnpg": {
       state.assigneePage = Number(parts[1] ?? 0);
-      await renderAssignee(ctx, state);
+      await renderAssignee(ctx, lc, state);
+      return;
+    }
+    case "proj": {
+      const v = parts[1]!;
+      state.data.projectId = v === "none" ? "none" : Number(v);
+      await advanceToRecurrence(ctx, lc, state);
       return;
     }
     case "rec": {
       const key = parts[1]!;
       state.data.recurrenceRule = RECURRENCE_RULES[key]?.rule ?? undefined;
-      await advanceToConfirm(ctx, state);
+      await advanceToConfirm(ctx, lc, state);
       return;
     }
     case "save":
-      await saveAndFinish(ctx, state);
+      await saveAndFinish(ctx, lc, state);
       return;
     case "edit": {
       const which = parts[1]!;
       const stepMap: Record<string, WizardStep> = {
-        title: "title",
-        desc: "desc",
-        prio: "priority",
-        due: "duedate",
-        asgn: "assignee",
-        rec: "recurrence",
+        title: "title", desc: "desc", prio: "priority",
+        due: "duedate", asgn: "assignee", rec: "recurrence",
       };
       const step = stepMap[which];
       if (!step) return;
@@ -241,24 +236,24 @@ export async function handleCallback(ctx: Context, parts: string[]) {
       await setState(chatId, tg.id, state);
       switch (step) {
         case "title":
-          await editOrReply(ctx, "Send a new title:");
+          await editOrReply(ctx, t(lc, "wizard_send_new_title"));
           return;
         case "desc":
-          await editOrReply(ctx, "Send a new description (or tap Skip):", {
-            reply_markup: { inline_keyboard: [[{ text: "⏭️ Skip", callback_data: "nt:descskip" }]] },
+          await editOrReply(ctx, t(lc, "wizard_send_new_desc"), {
+            reply_markup: { inline_keyboard: [[{ text: t(lc, "skip"), callback_data: "nt:descskip" }]] },
           });
           return;
         case "priority":
-          await renderPriority(ctx, state);
+          await renderPriority(ctx, lc);
           return;
         case "duedate":
-          await renderDueDate(ctx, state);
+          await renderDueDate(ctx, lc);
           return;
         case "assignee":
-          await renderAssignee(ctx, state);
+          await renderAssignee(ctx, lc, state);
           return;
         case "recurrence":
-          await renderRecurrence(ctx, state);
+          await renderRecurrence(ctx, lc);
           return;
       }
       return;
@@ -266,101 +261,109 @@ export async function handleCallback(ctx: Context, parts: string[]) {
   }
 }
 
-// ----- step renderers -----
-
-async function advanceToPriority(ctx: Context, state: NewTaskWizardState) {
+// ---------- step renderers ----------
+async function advanceToPriority(ctx: Context, lc: string, state: NewTaskWizardState) {
   state.step = "priority";
   await setState(ctx.chat!.id, ctx.from!.id, state);
-  await renderPriority(ctx, state);
+  await renderPriority(ctx, lc);
 }
-async function renderPriority(ctx: Context, _state: NewTaskWizardState) {
-  await editOrReply(ctx, `⚡ <b>Step 3 of 7 — Priority</b>\nHow important is this task?`, {
-    reply_markup: { inline_keyboard: priorityKb() },
-  });
+async function renderPriority(ctx: Context, lc: string) {
+  await editOrReply(ctx, t(lc, "wizard_priority_step"), { reply_markup: { inline_keyboard: priorityKb(lc) } });
 }
 
-async function advanceToDueDate(ctx: Context, state: NewTaskWizardState) {
+async function advanceToDueDate(ctx: Context, lc: string, state: NewTaskWizardState) {
   state.step = "duedate";
   await setState(ctx.chat!.id, ctx.from!.id, state);
-  await renderDueDate(ctx, state);
+  await renderDueDate(ctx, lc);
 }
-async function renderDueDate(ctx: Context, _state: NewTaskWizardState) {
-  await editOrReply(ctx, `📅 <b>Step 4 of 7 — Due date</b>\nWhen should this be done?`, {
-    reply_markup: { inline_keyboard: dueDateKb() },
-  });
+async function renderDueDate(ctx: Context, lc: string) {
+  await editOrReply(ctx, t(lc, "wizard_due_step"), { reply_markup: { inline_keyboard: dueDateKb(lc) } });
 }
 
-async function advanceToTime(ctx: Context, state: NewTaskWizardState) {
+async function advanceToTime(ctx: Context, lc: string, state: NewTaskWizardState) {
   state.step = "duetime";
   await setState(ctx.chat!.id, ctx.from!.id, state);
-  await editOrReply(ctx, `🕐 <b>Step 4 of 7 — Time of day</b>\nPick a time on ${h(state.data.dueDate ?? "")}.`, {
-    reply_markup: { inline_keyboard: dueTimeKb() },
+  await editOrReply(ctx, t(lc, "wizard_time_step", { date: h(state.data.dueDate ?? "") }), {
+    reply_markup: { inline_keyboard: dueTimeKb(lc) },
   });
 }
 
-async function advanceToAssignee(ctx: Context, state: NewTaskWizardState) {
+async function advanceToAssignee(ctx: Context, lc: string, state: NewTaskWizardState) {
   state.step = "assignee";
   state.assigneePage = 0;
   await setState(ctx.chat!.id, ctx.from!.id, state);
-  await renderAssignee(ctx, state);
+  await renderAssignee(ctx, lc, state);
 }
-async function renderAssignee(ctx: Context, state: NewTaskWizardState) {
+async function renderAssignee(ctx: Context, lc: string, state: NewTaskWizardState) {
   const members = await listWorkspaceMembers(state.workspaceId);
-  await editOrReply(ctx, `👤 <b>Step 5 of 7 — Assignee</b>\nWho will work on this?`, {
-    reply_markup: { inline_keyboard: assigneeKb(members, state.assigneePage ?? 0) },
+  await editOrReply(ctx, t(lc, "wizard_assignee_step"), {
+    reply_markup: { inline_keyboard: assigneeKb(lc, members, state.assigneePage ?? 0) },
   });
 }
 
-async function advanceToRecurrence(ctx: Context, state: NewTaskWizardState) {
+async function advanceToProject(ctx: Context, lc: string, state: NewTaskWizardState) {
+  state.step = "project";
+  await setState(ctx.chat!.id, ctx.from!.id, state);
+  const projects = await db()
+    .select({ id: schema.projects.id, name: schema.projects.name })
+    .from(schema.projects)
+    .where(and(eq(schema.projects.workspaceId, state.workspaceId), eq(schema.projects.archived, false)))
+    .limit(20);
+  // If no projects exist, skip the step entirely
+  if (projects.length === 0) {
+    state.data.projectId = "none";
+    await advanceToRecurrence(ctx, lc, state);
+    return;
+  }
+  await editOrReply(ctx, t(lc, "wizard_project_step"), {
+    reply_markup: { inline_keyboard: projectPickerKb(lc, projects) },
+  });
+}
+
+async function advanceToRecurrence(ctx: Context, lc: string, state: NewTaskWizardState) {
   state.step = "recurrence";
   await setState(ctx.chat!.id, ctx.from!.id, state);
-  await renderRecurrence(ctx, state);
+  await renderRecurrence(ctx, lc);
 }
-async function renderRecurrence(ctx: Context, _state: NewTaskWizardState) {
-  await editOrReply(ctx, `🔁 <b>Step 6 of 7 — Recurrence</b>\nDoes this repeat?`, {
-    reply_markup: { inline_keyboard: recurrenceKb() },
-  });
+async function renderRecurrence(ctx: Context, lc: string) {
+  await editOrReply(ctx, t(lc, "wizard_recurrence_step"), { reply_markup: { inline_keyboard: recurrenceKb(lc) } });
 }
 
-async function advanceToConfirm(ctx: Context, state: NewTaskWizardState) {
+async function advanceToConfirm(ctx: Context, lc: string, state: NewTaskWizardState) {
   state.step = "confirm";
   await setState(ctx.chat!.id, ctx.from!.id, state);
-  await renderConfirm(ctx, state);
+  await renderConfirm(ctx, lc, state);
 }
-async function renderConfirm(ctx: Context, state: NewTaskWizardState) {
+async function renderConfirm(ctx: Context, lc: string, state: NewTaskWizardState) {
   const d = state.data;
-  const assigneeName = await resolveAssigneeName(state.workspaceId, d.assigneeUserId, ctx.from!.id);
+  const assigneeName = await resolveAssigneeName(state.workspaceId, d.assigneeUserId, ctx.from!.id, lc);
   const recurrenceLabel = (() => {
-    if (!d.recurrenceRule) return "None";
+    if (!d.recurrenceRule) return t(lc, "rec_label_none");
     for (const k of Object.keys(RECURRENCE_RULES)) {
-      if (RECURRENCE_RULES[k]!.rule === d.recurrenceRule) return RECURRENCE_RULES[k]!.label;
+      if (RECURRENCE_RULES[k]!.rule === d.recurrenceRule) return t(lc, RECURRENCE_RULES[k]!.labelKey);
     }
     return d.recurrenceRule;
   })();
   const dueText = d.dueDate ? `${d.dueDate}${d.dueTime ? " " + d.dueTime : ""}` : "—";
   const lines = [
-    `📋 <b>Step 7 of 7 — Review</b>`,
-    ``,
-    `<b>Title:</b> ${h(d.title ?? "—")}`,
-    `<b>Description:</b> ${d.description ? h(d.description) : "—"}`,
-    `<b>Priority:</b> ${PRIORITY_LABEL[d.priority ?? "p2"]}`,
-    `<b>Due:</b> ${h(dueText)}`,
-    `<b>Assignee:</b> ${h(assigneeName)}`,
-    `<b>Recurrence:</b> ${h(recurrenceLabel)}`,
+    t(lc, "wizard_review_step"),
+    "",
+    `<b>${t(lc, "wizard_field_title")}:</b> ${h(d.title ?? "—")}`,
+    `<b>${t(lc, "wizard_field_desc")}:</b> ${d.description ? h(d.description) : "—"}`,
+    `<b>${t(lc, "wizard_field_priority")}:</b> ${t(lc, PRIORITY_KEYS[d.priority ?? "p2"]!)}`,
+    `<b>${t(lc, "wizard_field_due")}:</b> ${h(dueText)}`,
+    `<b>${t(lc, "wizard_field_assignee")}:</b> ${h(assigneeName)}`,
+    `<b>${t(lc, "wizard_field_recurrence")}:</b> ${h(recurrenceLabel)}`,
   ];
-  await editOrReply(ctx, lines.join("\n"), {
-    reply_markup: { inline_keyboard: confirmKb() },
-  });
+  await editOrReply(ctx, lines.join("\n"), { reply_markup: { inline_keyboard: confirmKb(lc) } });
 }
 
-// ----- save + back -----
-
-async function saveAndFinish(ctx: Context, state: NewTaskWizardState) {
+async function saveAndFinish(ctx: Context, lc: string, state: NewTaskWizardState) {
   const tg = ctx.from!;
   const chatId = ctx.chat!.id;
   const m = await getMembershipByTelegramId(tg.id);
   if (!m) {
-    await editOrReply(ctx, "You're not a member of this workspace anymore.");
+    await editOrReply(ctx, t(lc, "not_member"));
     await clearState(chatId, tg.id);
     return;
   }
@@ -371,11 +374,14 @@ async function saveAndFinish(ctx: Context, state: NewTaskWizardState) {
   if (state.data.assigneeUserId === "self") assigneeUserId = m.userId;
   else if (typeof state.data.assigneeUserId === "number") assigneeUserId = state.data.assigneeUserId;
 
+  const projectId = typeof state.data.projectId === "number" ? state.data.projectId : null;
+
   const [task] = await db()
     .insert(schema.tasks)
     .values({
       workspaceId: m.workspaceId,
       creatorId: m.userId,
+      projectId,
       title: state.data.title!,
       description: state.data.description ?? null,
       priority: state.data.priority ?? "p2",
@@ -396,10 +402,11 @@ async function saveAndFinish(ctx: Context, state: NewTaskWizardState) {
       if (u[0]) {
         await sendMessage(
           u[0].telegramId,
-          `🆕 New task <b>#${task!.id}</b> — ${h(state.data.title ?? "")}\n\n<i>Assigned by ${h(displayName(tg))}</i>`,
+          t(lc, "task_assigned_dm", { id: String(task!.id), title: h(state.data.title ?? "") }) +
+            `\n\n<i>${h(displayName(tg))}</i>`,
           {
             reply_markup: {
-              inline_keyboard: [[{ text: "👁️ View task", callback_data: `t:view:${task!.id}` }]],
+              inline_keyboard: [[{ text: t(lc, "btn_view_task"), callback_data: `t:view:${task!.id}` }]],
             },
           }
         ).catch((e) => log.warn("notify assignee failed", { err: String(e) }));
@@ -419,82 +426,59 @@ async function saveAndFinish(ctx: Context, state: NewTaskWizardState) {
 
   await editOrReply(
     ctx,
-    `✅ Task <b>#${task!.id}</b> created.\n<b>${h(state.data.title ?? "")}</b>`,
+    `${t(lc, "task_created", { id: String(task!.id), title: h(state.data.title ?? "") })}`,
     {
       reply_markup: {
         inline_keyboard: [
-          [{ text: "👁️ Open task", callback_data: `t:view:${task!.id}` }],
-          [{ text: "➕ New task", callback_data: "nt:new" }, { text: "📋 My tasks", callback_data: "lst:my:p:0" }],
+          [{ text: t(lc, "btn_open_task"), callback_data: `t:view:${task!.id}` }],
+          [{ text: t(lc, "btn_new_task"), callback_data: "nt:new" }, { text: t(lc, "btn_my_tasks"), callback_data: "lst:my:p:0" }],
         ],
       },
     }
   );
 }
 
-async function goBack(ctx: Context, state: NewTaskWizardState) {
-  const order: WizardStep[] = ["title", "desc", "priority", "duedate", "duetime", "assignee", "recurrence", "confirm"];
+async function goBack(ctx: Context, lc: string, state: NewTaskWizardState) {
+  const order: WizardStep[] = ["title", "desc", "priority", "duedate", "duetime", "assignee", "project", "recurrence", "confirm"];
   const idx = order.indexOf(state.step);
   if (idx <= 0) return;
   state.step = order[idx - 1]!;
   await setState(ctx.chat!.id, ctx.from!.id, state);
   switch (state.step) {
-    case "title":
-      await editOrReply(ctx, `📝 <b>Step 1 of 7 — Title</b>\nWhat is the task about?`);
-      return;
+    case "title": return editOrReply(ctx, t(lc, "wizard_title_step"));
     case "desc":
-      await editOrReply(ctx, `📝 <b>Step 2 of 7 — Description</b>\nAdd details, or tap Skip.`, {
-        reply_markup: { inline_keyboard: [[{ text: "⏭️ Skip", callback_data: "nt:descskip" }]] },
+      return editOrReply(ctx, t(lc, "wizard_desc_step"), {
+        reply_markup: { inline_keyboard: [[{ text: t(lc, "skip"), callback_data: "nt:descskip" }]] },
       });
-      return;
-    case "priority":
-      await renderPriority(ctx, state);
-      return;
-    case "duedate":
-      await renderDueDate(ctx, state);
-      return;
+    case "priority": return renderPriority(ctx, lc);
+    case "duedate": return renderDueDate(ctx, lc);
     case "duetime":
-      await editOrReply(ctx, `🕐 Pick a time on ${h(state.data.dueDate ?? "")}.`, {
-        reply_markup: { inline_keyboard: dueTimeKb() },
+      return editOrReply(ctx, t(lc, "wizard_time_step", { date: h(state.data.dueDate ?? "") }), {
+        reply_markup: { inline_keyboard: dueTimeKb(lc) },
       });
-      return;
-    case "assignee":
-      await renderAssignee(ctx, state);
-      return;
-    case "recurrence":
-      await renderRecurrence(ctx, state);
-      return;
-    case "confirm":
-      await renderConfirm(ctx, state);
-      return;
+    case "assignee": return renderAssignee(ctx, lc, state);
+    case "project": return advanceToProject(ctx, lc, state);
+    case "recurrence": return renderRecurrence(ctx, lc);
+    case "confirm": return renderConfirm(ctx, lc, state);
   }
 }
-
-// ----- helpers -----
 
 function computePresetDate(key: string): string {
   const now = DateTime.now().setZone(TZ);
   switch (key) {
-    case "today":
-      return now.toFormat("yyyy-LL-dd");
-    case "tomorrow":
-      return now.plus({ days: 1 }).toFormat("yyyy-LL-dd");
-    case "3d":
-      return now.plus({ days: 3 }).toFormat("yyyy-LL-dd");
-    case "fri":
-      return now.set({ weekday: 5 }).toFormat("yyyy-LL-dd");
-    case "nextmon":
-      return now.plus({ weeks: 1 }).set({ weekday: 1 }).toFormat("yyyy-LL-dd");
-    case "2w":
-      return now.plus({ weeks: 2 }).toFormat("yyyy-LL-dd");
-    default:
-      return now.toFormat("yyyy-LL-dd");
+    case "today": return now.toFormat("yyyy-LL-dd");
+    case "tomorrow": return now.plus({ days: 1 }).toFormat("yyyy-LL-dd");
+    case "3d": return now.plus({ days: 3 }).toFormat("yyyy-LL-dd");
+    case "fri": return now.set({ weekday: 5 }).toFormat("yyyy-LL-dd");
+    case "nextmon": return now.plus({ weeks: 1 }).set({ weekday: 1 }).toFormat("yyyy-LL-dd");
+    case "2w": return now.plus({ weeks: 2 }).toFormat("yyyy-LL-dd");
+    default: return now.toFormat("yyyy-LL-dd");
   }
 }
-
 function composeDueAt(date?: string, time?: string): Date | null {
   if (!date) return null;
-  const t = time ?? "17:00";
-  const dt = DateTime.fromFormat(`${date} ${t}`, "yyyy-LL-dd HH:mm", { zone: TZ });
+  const tt = time ?? "17:00";
+  const dt = DateTime.fromFormat(`${date} ${tt}`, "yyyy-LL-dd HH:mm", { zone: TZ });
   return dt.isValid ? dt.toJSDate() : null;
 }
 
@@ -512,18 +496,17 @@ async function listWorkspaceMembers(workspaceId: number): Promise<{ id: number; 
     .limit(50);
   return rows.map((r) => ({
     id: r.id,
-    name:
-      [r.first, r.last].filter(Boolean).join(" ") ||
-      (r.uname ? `@${r.uname}` : `user#${r.id}`),
+    name: [r.first, r.last].filter(Boolean).join(" ") || (r.uname ? `@${r.uname}` : `user#${r.id}`),
   }));
 }
 
 async function resolveAssigneeName(
   workspaceId: number,
   assigneeId: number | "self" | "none" | undefined,
-  callerTelegramId: number
+  callerTelegramId: number,
+  lc: string
 ): Promise<string> {
-  if (!assigneeId || assigneeId === "none") return "— Unassigned";
+  if (!assigneeId || assigneeId === "none") return t(lc, "wizard_unassigned");
   if (assigneeId === "self") {
     const m = await getMembershipByTelegramId(callerTelegramId);
     if (!m) return "Self";
@@ -550,9 +533,7 @@ async function editOrReply(ctx: Context, text: string, extra?: Record<string, un
     try {
       await ctx.editMessageText(text, opts);
       return;
-    } catch {
-      // fall through to reply if edit fails (message too old etc.)
-    }
+    } catch { /* noop */ }
   }
   await ctx.reply(text, opts);
 }

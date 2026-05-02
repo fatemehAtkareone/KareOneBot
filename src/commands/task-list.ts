@@ -3,6 +3,8 @@ import { and, eq, lte, gte, inArray, desc, asc, SQL } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { getMembershipByTelegramId } from "@/lib/rbac";
 import { taskListKb } from "@/lib/keyboards";
+import { t } from "@/i18n";
+import { userLang } from "@/lib/locale";
 
 const PAGE_SIZE = 8;
 const OPEN = ["open", "assigned", "in_progress", "blocked", "in_review"] as const;
@@ -16,7 +18,7 @@ interface ListState {
   page: number;
 }
 
-const stateMem = new Map<string, ListState>(); // key: `${chatId}:${userId}`
+const stateMem = new Map<string, ListState>();
 
 function key(ctx: Context) {
   return `${ctx.chat?.id}:${ctx.from?.id}`;
@@ -38,9 +40,8 @@ export async function handleMyTasksCommand(ctx: Context) {
 }
 
 export async function handleListCallback(ctx: Context, parts: string[]) {
-  // parts: my, p|f|s, value
-  const sub = parts[0]; // my
-  const verb = parts[1]; // p / f / s
+  const sub = parts[0];
+  const verb = parts[1];
   const value = parts[2];
   const s = getOrInit(ctx);
   if (sub !== "my") return;
@@ -59,9 +60,10 @@ export async function handleListCallback(ctx: Context, parts: string[]) {
 
 async function render(ctx: Context) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const m = await getMembershipByTelegramId(tg.id);
   if (!m) {
-    await replyOrEdit(ctx, "You're not a member of any workspace yet.");
+    await replyOrEdit(ctx, t(lc, "not_member"));
     return;
   }
   const s = getOrInit(ctx);
@@ -69,7 +71,7 @@ async function render(ctx: Context) {
   const conds: SQL[] = [eq(schema.tasks.workspaceId, m.workspaceId)];
 
   if (s.filter === "watching") {
-    // Reuse watchers join
+    // join handled below
   } else if (s.filter === "done") {
     conds.push(eq(schema.tasks.status, "done"));
   } else {
@@ -122,19 +124,23 @@ async function render(ctx: Context) {
   const pageRows = rows.slice(0, PAGE_SIZE);
 
   const filterLabels: Record<Filter, string> = {
-    all: "All open",
-    today: "Today",
-    overdue: "Overdue",
-    week: "Next 7 days",
-    done: "Done",
-    watching: "Watching",
+    all: t(lc, "list_filter_label_all"),
+    today: t(lc, "list_filter_label_today"),
+    overdue: t(lc, "list_filter_label_overdue"),
+    week: t(lc, "list_filter_label_week"),
+    done: t(lc, "list_filter_label_done"),
+    watching: t(lc, "list_filter_label_watching"),
   };
-  const sortLabels: Record<Sort, string> = { due: "due date", prio: "priority", new: "newest" };
-  const header = `📋 <b>My tasks</b> · ${filterLabels[s.filter]} · sorted by ${sortLabels[s.sort]}`;
-  const body = pageRows.length === 0 ? `\n\n<i>No tasks match this filter.</i>` : "";
+  const sortLabels: Record<Sort, string> = {
+    due: t(lc, "list_sort_label_due"),
+    prio: t(lc, "list_sort_label_prio"),
+    new: t(lc, "list_sort_label_new"),
+  };
+  const header = t(lc, "list_header", { filter: filterLabels[s.filter], sort: sortLabels[s.sort] });
+  const body = pageRows.length === 0 ? t(lc, "list_empty") : "";
 
   await replyOrEdit(ctx, header + body, {
-    reply_markup: { inline_keyboard: taskListKb(pageRows, s.filter, s.sort, s.page, hasNext) },
+    reply_markup: { inline_keyboard: taskListKb(lc, pageRows, s.filter, s.sort, s.page, hasNext) },
   });
 }
 

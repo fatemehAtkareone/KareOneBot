@@ -9,6 +9,7 @@ import { handleDone } from "./done";
 import { handleAssign } from "./assign";
 import { handleAsk } from "./ask";
 import { handleAnswer, consumeAnswerInput, handleListQuestions } from "./answer";
+import { handleUpvote, handleOfficial } from "./qa-actions";
 import { handleKb } from "./kb";
 import { handleWork } from "./work";
 import { handleInvite } from "./invite";
@@ -18,6 +19,12 @@ import { handleSettings, handleSettingsCallback } from "./settings";
 import { handleSla } from "./sla";
 import { handleApprovalRequest, handleCallback as approvalCallback, consumeRejectReason } from "./approval";
 import { handleReport } from "./report";
+import { handleFind } from "./find";
+import { handleProjectsList, handleNewProject } from "./projects";
+import { handleExport } from "./export";
+import { handleHistory } from "./history";
+import { handleStandup } from "./standup";
+import { handleInlineQuery } from "./inline";
 import { handleDiag } from "./diag";
 import { getState } from "@/lib/redis";
 import { t } from "@/i18n";
@@ -31,6 +38,12 @@ export async function route(ctx: Context): Promise<void> {
   const tg = ctx.from;
   if (!tg) return;
   await upsertUser(tg);
+
+  // ---------------- Inline queries ----------------
+  if (ctx.inlineQuery) {
+    await handleInlineQuery(ctx);
+    return;
+  }
 
   // ---------------- Callback queries ----------------
   if (ctx.callbackQuery?.data) {
@@ -49,21 +62,11 @@ export async function route(ctx: Context): Promise<void> {
           await ctx.answerCallbackQuery().catch(() => {});
         }
         return;
-      case "nt":
-        await wizardCallback(ctx, rest);
-        return;
-      case "t":
-        await taskCallback(ctx, rest);
-        return;
-      case "lst":
-        await handleListCallback(ctx, rest);
-        return;
-      case "set":
-        await handleSettingsCallback(ctx, rest);
-        return;
-      case "ap":
-        await approvalCallback(ctx, rest);
-        return;
+      case "nt":   await wizardCallback(ctx, rest); return;
+      case "t":    await taskCallback(ctx, rest); return;
+      case "lst":  await handleListCallback(ctx, rest); return;
+      case "set":  await handleSettingsCallback(ctx, rest); return;
+      case "ap":   await approvalCallback(ctx, rest); return;
       default:
         await ctx.answerCallbackQuery().catch(() => {});
         return;
@@ -77,26 +80,11 @@ export async function route(ctx: Context): Promise<void> {
   // ---------------- Active wizards / text-input flows ----------------
   if (chatId && text && !text.startsWith("/")) {
     const state = await getState<AnyState>(chatId, userId);
-    if (state?.flow === "newtask") {
-      await wizardTextInput(ctx, state as NewTaskWizardState);
-      return;
-    }
-    if (state?.flow === "comment") {
-      await consumeCommentInput(ctx, state as { flow: "comment"; taskId: number });
-      return;
-    }
-    if (state?.flow === "subtask") {
-      await consumeSubtaskInput(ctx, state as { flow: "subtask"; parentId: number });
-      return;
-    }
-    if (state?.flow === "answer") {
-      await consumeAnswerInput(ctx, state as { flow: "answer"; questionId: number });
-      return;
-    }
-    if (state?.flow === "reject_reason") {
-      await consumeRejectReason(ctx, state as { flow: "reject_reason"; approvalStepId: number });
-      return;
-    }
+    if (state?.flow === "newtask") return wizardTextInput(ctx, state as NewTaskWizardState);
+    if (state?.flow === "comment") return consumeCommentInput(ctx, state as { flow: "comment"; taskId: number });
+    if (state?.flow === "subtask") return consumeSubtaskInput(ctx, state as { flow: "subtask"; parentId: number });
+    if (state?.flow === "answer")  return consumeAnswerInput(ctx, state as { flow: "answer"; questionId: number });
+    if (state?.flow === "reject_reason") return consumeRejectReason(ctx, state as { flow: "reject_reason"; approvalStepId: number });
   }
 
   if (!text.startsWith("/")) return;
@@ -106,35 +94,43 @@ export async function route(ctx: Context): Promise<void> {
   log.debug("command", { cmd, userId });
 
   switch (cmd) {
-    case "/start":          return handleStart(ctx, args);
-    case "/help":           return handleHelp(ctx);
-    case "/whoami":         return handleWhoami(ctx);
+    case "/start":            return handleStart(ctx, args);
+    case "/help":             return handleHelp(ctx);
+    case "/whoami":           return handleWhoami(ctx);
     case "/newtask":
-    case "/new":            return startWizard(ctx);
-    case "/task":           return handleViewTask(ctx, args);
+    case "/new":              return startWizard(ctx);
+    case "/task":             return handleViewTask(ctx, args);
+    case "/find":
+    case "/search":           return handleFind(ctx, args);
     case "/mytasks":
-    case "/inbox":          return handleMyTasksCommand(ctx);
-    case "/today":          { const { handleToday } = await import("./mytasks"); return handleToday(ctx); }
-    case "/overdue":        { const { handleOverdue } = await import("./mytasks"); return handleOverdue(ctx); }
-    case "/done":           return handleDone(ctx, args);
-    case "/assign":         return handleAssign(ctx, args);
-    case "/ask":            return handleAsk(ctx, args);
-    case "/answer":         return handleAnswer(ctx, args);
-    case "/questions":      return handleListQuestions(ctx);
-    case "/kb":             return handleKb(ctx, args);
-    case "/work":           return handleWork(ctx, args);
-    case "/invite":         return handleInvite(ctx);
-    case "/settings":       return handleSettings(ctx);
-    case "/sla":            return handleSla(ctx, args);
+    case "/inbox":            return handleMyTasksCommand(ctx);
+    case "/today":            { const { handleToday } = await import("./mytasks"); return handleToday(ctx); }
+    case "/overdue":          { const { handleOverdue } = await import("./mytasks"); return handleOverdue(ctx); }
+    case "/done":             return handleDone(ctx, args);
+    case "/assign":           return handleAssign(ctx, args);
+    case "/ask":              return handleAsk(ctx, args);
+    case "/answer":           return handleAnswer(ctx, args);
+    case "/questions":        return handleListQuestions(ctx);
+    case "/upvote":           return handleUpvote(ctx, args);
+    case "/official":         return handleOfficial(ctx, args);
+    case "/kb":               return handleKb(ctx, args);
+    case "/work":             return handleWork(ctx, args);
+    case "/invite":           return handleInvite(ctx);
+    case "/settings":         return handleSettings(ctx);
+    case "/sla":              return handleSla(ctx, args);
     case "/report":
-    case "/stats":          return handleReport(ctx);
-    case "/approval":
-    case "/approve_request":return handleApprovalRequest(ctx, args);
+    case "/stats":            return handleReport(ctx);
+    case "/approval":         return handleApprovalRequest(ctx, args);
+    case "/projects":         return handleProjectsList(ctx);
+    case "/newproject":       return handleNewProject(ctx, args);
+    case "/export":           return handleExport(ctx);
+    case "/history":          return handleHistory(ctx, args);
+    case "/standup":          return handleStandup(ctx);
     case "/lang":
-    case "/language":       return handleLang(ctx, args);
-    case "/diag":           return handleDiag(ctx);
+    case "/language":         return handleLang(ctx, args);
+    case "/diag":             return handleDiag(ctx);
     case "/cancel":
-    case "/skip":           return handleCancel(ctx);
+    case "/skip":             return handleCancel(ctx);
     default: {
       const lc = await userLang(userId, tg.language_code);
       await ctx.reply(t(lc, "unknown_command"));

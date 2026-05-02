@@ -8,5 +8,5 @@ export async function handleCancel(ctx: Context) {
   const userId = ctx.from?.id;
   if (chatId && userId) await clearState(chatId, userId);
   const lc = await userLang(userId ?? 0, ctx.from?.language_code);
-  await ctx.reply(t(lc, "wizard_cancelled"));
+  await ctx.reply(t(lc, "cancelled"));
 }
