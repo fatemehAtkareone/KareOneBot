@@ -10,12 +10,16 @@ export function bot(): Bot {
   return cached;
 }
 
-/** Escape text for MarkdownV2. */
-export function md(s: string): string {
-  return s.replace(/[_*[\]()~`>#+\-=|{}.!\\]/g, "\\$&");
+/** Escape user-provided text for HTML parse mode (only <, >, & matter). */
+export function h(s: string | number | null | undefined): string {
+  if (s === null || s === undefined) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
-/** Send a plain message bypassing the grammy middleware stack (useful in scheduled jobs). */
+/** Send a plain HTML message bypassing the grammy middleware stack. */
 export async function sendMessage(chatId: number, text: string, opts?: Record<string, unknown>) {
-  return bot().api.sendMessage(chatId, text, { parse_mode: "MarkdownV2", ...opts });
+  return bot().api.sendMessage(chatId, text, { parse_mode: "HTML", ...opts });
 }

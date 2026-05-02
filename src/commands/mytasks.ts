@@ -3,8 +3,9 @@ import { and, eq, lte, gte, ne, inArray } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { getMembershipByTelegramId } from "@/lib/rbac";
 import { t } from "@/i18n";
-import { md } from "@/lib/telegram";
+import { h } from "@/lib/telegram";
 import { formatDue } from "@/lib/dueparse";
+import { userLang } from "@/lib/locale";
 
 const OPEN_STATUSES = ["open", "assigned", "in_progress", "blocked", "in_review"] as const;
 
@@ -32,15 +33,15 @@ async function listAssigned(userId: number, workspaceId: number, opts?: { dueBef
     .limit(50);
 }
 
-function renderList(rows: { id: number; title: string; status: string; dueAt: Date | null }[], lc: string | undefined, tz: string) {
+function renderList(rows: { id: number; title: string; status: string; dueAt: Date | null }[], lc: string, tz: string) {
   if (rows.length === 0) return t(lc, "no_tasks");
   return rows
     .map((r) =>
       t(lc, "task_line", {
         id: String(r.id),
-        title: md(r.title),
+        title: h(r.title),
         status: r.status,
-        due: r.dueAt ? t(lc, "due_label", { due: md(formatDue(r.dueAt, tz, lc ?? "fa")) }) : "",
+        due: r.dueAt ? t(lc, "due_label", { due: h(formatDue(r.dueAt, tz, lc)) }) : "",
       })
     )
     .join("\n");
@@ -48,26 +49,29 @@ function renderList(rows: { id: number; title: string; status: string; dueAt: Da
 
 export async function handleMyTasks(ctx: Context) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const m = await getMembershipByTelegramId(tg.id);
-  if (!m) return void ctx.reply(t(tg.language_code, "not_member"));
+  if (!m) return void ctx.reply(t(lc, "not_member"));
   const rows = await listAssigned(m.userId, m.workspaceId);
-  await ctx.reply(renderList(rows, tg.language_code, "Asia/Tehran"), { parse_mode: "MarkdownV2" });
+  await ctx.reply(renderList(rows, lc, "Asia/Tehran"), { parse_mode: "HTML" });
 }
 
 export async function handleToday(ctx: Context) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const m = await getMembershipByTelegramId(tg.id);
-  if (!m) return void ctx.reply(t(tg.language_code, "not_member"));
+  if (!m) return void ctx.reply(t(lc, "not_member"));
   const end = new Date();
   end.setHours(23, 59, 59, 999);
   const rows = await listAssigned(m.userId, m.workspaceId, { dueBefore: end });
-  await ctx.reply(renderList(rows, tg.language_code, "Asia/Tehran"), { parse_mode: "MarkdownV2" });
+  await ctx.reply(renderList(rows, lc, "Asia/Tehran"), { parse_mode: "HTML" });
 }
 
 export async function handleOverdue(ctx: Context) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const m = await getMembershipByTelegramId(tg.id);
-  if (!m) return void ctx.reply(t(tg.language_code, "not_member"));
+  if (!m) return void ctx.reply(t(lc, "not_member"));
   const rows = await listAssigned(m.userId, m.workspaceId, { dueBefore: new Date() });
-  await ctx.reply(renderList(rows, tg.language_code, "Asia/Tehran"), { parse_mode: "MarkdownV2" });
+  await ctx.reply(renderList(rows, lc, "Asia/Tehran"), { parse_mode: "HTML" });
 }

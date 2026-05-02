@@ -4,11 +4,11 @@ import { db, schema } from "@/lib/db";
 import { getMembershipByTelegramId } from "@/lib/rbac";
 import { t } from "@/i18n";
 import { audit } from "@/lib/audit";
-import { md } from "@/lib/telegram";
+import { userLang } from "@/lib/locale";
 
 export async function handleDone(ctx: Context, args: string[]) {
   const tg = ctx.from!;
-  const lc = tg.language_code;
+  const lc = await userLang(tg.id, tg.language_code);
   const idArg = args[0];
   const id = idArg ? Number(idArg.replace(/^#/, "")) : NaN;
   if (!Number.isInteger(id)) {
@@ -26,7 +26,7 @@ export async function handleDone(ctx: Context, args: string[]) {
     .returning({ id: schema.tasks.id });
 
   if (!updated[0]) {
-    await ctx.reply(t(lc, "task_not_found", { id: String(id) }), { parse_mode: "MarkdownV2" });
+    await ctx.reply(t(lc, "task_not_found", { id: String(id) }), { parse_mode: "HTML" });
     return;
   }
 
@@ -38,5 +38,5 @@ export async function handleDone(ctx: Context, args: string[]) {
     entityId: id,
     diff: { status: "done" },
   });
-  await ctx.reply(t(lc, "task_done", { id: String(id) }), { parse_mode: "MarkdownV2" });
+  await ctx.reply(t(lc, "task_done", { id: String(id) }), { parse_mode: "HTML" });
 }

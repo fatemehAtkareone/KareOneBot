@@ -3,14 +3,16 @@ import { eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { getMembershipByTelegramId } from "@/lib/rbac";
 import { t } from "@/i18n";
-import { md } from "@/lib/telegram";
+import { h } from "@/lib/telegram";
 import { displayName } from "@/lib/users";
+import { userLang } from "@/lib/locale";
 
 export async function handleWhoami(ctx: Context) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const m = await getMembershipByTelegramId(tg.id);
   if (!m) {
-    await ctx.reply(t(tg.language_code, "not_member"));
+    await ctx.reply(t(lc, "not_member"));
     return;
   }
   const ws = await db()
@@ -20,11 +22,11 @@ export async function handleWhoami(ctx: Context) {
     .limit(1);
 
   await ctx.reply(
-    t(tg.language_code, "whoami", {
-      name: md(displayName(tg)),
+    t(lc, "whoami", {
+      name: h(displayName(tg)),
       role: m.role,
-      workspace: md(ws[0]?.name ?? ""),
+      workspace: h(ws[0]?.name ?? ""),
     }),
-    { parse_mode: "MarkdownV2" }
+    { parse_mode: "HTML" }
   );
 }

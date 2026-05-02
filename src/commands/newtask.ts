@@ -3,33 +3,34 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { getMembershipByTelegramId } from "@/lib/rbac";
 import { t } from "@/i18n";
-import { setState, clearState, getState } from "@/lib/redis";
+import { setState, clearState } from "@/lib/redis";
 import { parseDue } from "@/lib/dueparse";
-import { md, sendMessage } from "@/lib/telegram";
+import { h, sendMessage } from "@/lib/telegram";
 import { audit } from "@/lib/audit";
+import { userLang } from "@/lib/locale";
 import { log } from "@/lib/logger";
 
 export interface NewTaskState {
   flow: "newtask";
-  step: 0 | 1 | 2 | 3; // 0:title 1:assignee 2:due 3:priority
+  step: 0 | 1 | 2 | 3;
   data: {
     title?: string;
     assigneeUsername?: string;
-    dueAt?: string;   // ISO
+    dueAt?: string;
     priority?: "p0" | "p1" | "p2" | "p3";
   };
 }
 
 export async function handleNewTask(ctx: Context, args: string[]) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const m = await getMembershipByTelegramId(tg.id);
   if (!m) {
-    await ctx.reply(t(tg.language_code, "not_member"));
+    await ctx.reply(t(lc, "not_member"));
     return;
   }
   const chatId = ctx.chat!.id;
 
-  // One-shot mode: /newtask <title...> due:<...> @user p0|p1|...
   if (args.length > 0) {
     const joined = args.join(" ");
     const dueMatch = joined.match(/\bdue:(\S+(?:\s+\d{1,2}(?::\d{2})?(?:am|pm)?)?)/i);
@@ -42,7 +43,7 @@ export async function handleNewTask(ctx: Context, args: string[]) {
       .trim();
 
     if (title) {
-      await createTask(ctx, m.workspaceId, m.userId, {
+      await createTask(ctx, m.workspaceId, m.userId, lc, {
         title,
         assigneeUsername: userMatch?.[1],
         dueAt: dueMatch ? parseDue(dueMatch[1]!, "Asia/Tehran")?.toISOString() : undefined,
@@ -52,13 +53,13 @@ export async function handleNewTask(ctx: Context, args: string[]) {
     }
   }
 
-  // Wizard mode
   await setState<NewTaskState>(chatId, tg.id, { flow: "newtask", step: 0, data: {} });
-  await ctx.reply(t(tg.language_code, "wizard_title"));
+  await ctx.reply(t(lc, "wizard_title"));
 }
 
 export async function handleNewTaskWizardStep(ctx: Context, state: NewTaskState) {
   const tg = ctx.from!;
+  const lc = await userLang(tg.id, tg.language_code);
   const chatId = ctx.chat!.id;
   const text = ctx.message?.text?.trim() ?? "";
 
@@ -67,7 +68,7 @@ export async function handleNewTaskWizardStep(ctx: Context, state: NewTaskState)
       state.data.title = text;
       state.step = 1;
       await setState(chatId, tg.id, state);
-      await ctx.reply(t(tg.language_code, "wizard_assignee"));
+      await ctx.reply(t(lc, "wizard_assignee"));
       return;
     }
     case 1: {
@@ -75,7 +76,7 @@ export async function handleNewTaskWizardStep(ctx: Context, state: NewTaskState)
       if (m) state.data.assigneeUsername = m[1];
       state.step = 2;
       await setState(chatId, tg.id, state);
-      await ctx.reply(t(tg.language_code, "wizard_due"));
+      await ctx.reply(t(lc, "wizard_due"), { parse_mode: "HTML" });
       return;
     }
     case 2: {
@@ -83,7 +84,7 @@ export async function handleNewTaskWizardStep(ctx: Context, state: NewTaskState)
       if (due) state.data.dueAt = due.toISOString();
       state.step = 3;
       await setState(chatId, tg.id, state);
-      await ctx.reply(t(tg.language_code, "wizard_priority"));
+      await ctx.reply(t(lc, "wizard_priority"));
       return;
     }
     case 3: {
@@ -93,10 +94,10 @@ export async function handleNewTaskWizardStep(ctx: Context, state: NewTaskState)
       const membership = await getMembershipByTelegramId(tg.id);
       if (!membership) {
         await clearState(chatId, tg.id);
-        await ctx.reply(t(tg.language_code, "not_member"));
+        await ctx.reply(t(lc, "not_member"));
         return;
       }
-      await createTask(ctx, membership.workspaceId, membership.userId, state.data);
+      await createTask(ctx, membership.workspaceId, membership.userId, lc, state.data);
       await clearState(chatId, tg.id);
       return;
     }
@@ -107,11 +108,9 @@ async function createTask(
   ctx: Context,
   workspaceId: number,
   creatorId: number,
+  lc: string,
   data: NewTaskState["data"]
 ) {
-  const tg = ctx.from!;
-  const lc = tg.language_code;
-
   let assigneeUserId: number | null = null;
   if (data.assigneeUsername) {
     const found = await db()
@@ -142,7 +141,6 @@ async function createTask(
 
   if (assigneeUserId) {
     await db().insert(schema.taskAssignees).values({ taskId: task!.id, userId: assigneeUserId });
-    // Notify the assignee
     const assigneeTg = await db()
       .select({ telegramId: schema.users.telegramId })
       .from(schema.users)
@@ -151,13 +149,13 @@ async function createTask(
     if (assigneeTg[0]) {
       await sendMessage(
         assigneeTg[0].telegramId,
-        `🆕 ${md(`New task #${task!.id}: ${data.title}`)}`
+        `🆕 New task <b>#${task!.id}</b>: ${h(data.title ?? "")}`
       ).catch((e) => log.warn("notify assignee failed", { err: String(e) }));
     }
   }
 
   await audit({ workspaceId, actorId: creatorId, action: "create", entity: "task", entityId: task!.id, diff: { ...data } });
-  await ctx.reply(t(lc, "task_created", { id: String(task!.id), title: md(data.title ?? "") }), {
-    parse_mode: "MarkdownV2",
+  await ctx.reply(t(lc, "task_created", { id: String(task!.id), title: h(data.title ?? "") }), {
+    parse_mode: "HTML",
   });
 }

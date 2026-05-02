@@ -5,19 +5,21 @@ import { env } from "@/lib/env";
 import { t } from "@/i18n";
 import { upsertUser, displayName } from "@/lib/users";
 import { audit } from "@/lib/audit";
-import { md } from "@/lib/telegram";
+import { h } from "@/lib/telegram";
+import { userLang } from "@/lib/locale";
 import { log } from "@/lib/logger";
 
 export async function handleStart(ctx: Context, args: string[]) {
   const tg = ctx.from!;
   const { id: userId } = await upsertUser(tg);
+  const lc = await userLang(tg.id, tg.language_code);
   const arg = args[0];
 
   // Bootstrap: first user with the install token becomes Super Admin
   if (arg && arg === env().INSTALL_TOKEN) {
     const existing = await db().select({ id: schema.workspaces.id }).from(schema.workspaces).limit(1);
     if (existing[0]) {
-      await ctx.reply(t(tg.language_code, "bootstrap_already"), { parse_mode: "MarkdownV2" });
+      await ctx.reply(t(lc, "bootstrap_already"), { parse_mode: "HTML" });
       return;
     }
     const [ws] = await db()
@@ -36,7 +38,7 @@ export async function handleStart(ctx: Context, args: string[]) {
     });
 
     await audit({ workspaceId: ws!.id, actorId: userId, action: "create", entity: "workspace", entityId: ws!.id });
-    await ctx.reply(t(tg.language_code, "bootstrap_done", { workspace: md(ws!.name) }), { parse_mode: "MarkdownV2" });
+    await ctx.reply(t(lc, "bootstrap_done", { workspace: h(ws!.name) }), { parse_mode: "HTML" });
     log.info("workspace bootstrapped", { workspaceId: ws!.id, userId });
     return;
   }
@@ -64,15 +66,15 @@ export async function handleStart(ctx: Context, args: string[]) {
       .set({ usedBy: userId })
       .where(eq(schema.inviteTokens.token, token));
     await audit({ workspaceId: row.workspaceId, actorId: userId, action: "invite", entity: "membership" });
-    await ctx.reply(t(tg.language_code, "welcome", { name: md(displayName(tg)) }), { parse_mode: "MarkdownV2" });
+    await ctx.reply(t(lc, "welcome", { name: h(displayName(tg)) }), { parse_mode: "HTML" });
     return;
   }
 
+  // Plain /start: greet + offer language picker
   await ctx.reply(
-    `${t(tg.language_code, "welcome", { name: md(displayName(tg)) })}\n\n` +
-      "Choose your language / زبان را انتخاب کنید:",
+    `${t(lc, "welcome", { name: h(displayName(tg)) })}\n\n${t(lc, "choose_lang")}`,
     {
-      parse_mode: "MarkdownV2",
+      parse_mode: "HTML",
       reply_markup: {
         inline_keyboard: [
           [

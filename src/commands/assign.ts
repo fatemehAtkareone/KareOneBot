@@ -4,12 +4,13 @@ import { db, schema } from "@/lib/db";
 import { getMembershipByTelegramId, hasRole } from "@/lib/rbac";
 import { t } from "@/i18n";
 import { audit } from "@/lib/audit";
-import { md, sendMessage } from "@/lib/telegram";
+import { h, sendMessage } from "@/lib/telegram";
+import { userLang } from "@/lib/locale";
 import { log } from "@/lib/logger";
 
 export async function handleAssign(ctx: Context, args: string[]) {
   const tg = ctx.from!;
-  const lc = tg.language_code;
+  const lc = await userLang(tg.id, tg.language_code);
   const m = await getMembershipByTelegramId(tg.id);
   if (!m) return void ctx.reply(t(lc, "not_member"));
 
@@ -29,11 +30,10 @@ export async function handleAssign(ctx: Context, args: string[]) {
     .where(and(eq(schema.tasks.id, id), eq(schema.tasks.workspaceId, m.workspaceId)))
     .limit(1);
   if (!task[0]) {
-    await ctx.reply(t(lc, "task_not_found", { id: String(id) }), { parse_mode: "MarkdownV2" });
+    await ctx.reply(t(lc, "task_not_found", { id: String(id) }), { parse_mode: "HTML" });
     return;
   }
 
-  // Permission: managers+ OR the task creator
   const isCreator = task[0].creatorId === m.userId;
   if (!isCreator && !hasRole(m.role, "manager")) {
     await ctx.reply(t(lc, "permission_denied"));
@@ -69,9 +69,9 @@ export async function handleAssign(ctx: Context, args: string[]) {
     diff: { assigneeUserId: target[0].id },
   });
 
-  await sendMessage(target[0].telegramId, `🆕 ${md(`Task #${id} assigned to you.`)}`).catch((e) =>
+  await sendMessage(target[0].telegramId, `🆕 Task <b>#${id}</b> assigned to you.`).catch((e) =>
     log.warn("notify failed", { err: String(e) })
   );
 
-  await ctx.reply(`✅ Reassigned task #${id} to @${usernameMatch[1]}.`);
+  await ctx.reply(`✅ Reassigned task #${id} to @${h(usernameMatch[1]!)}.`, { parse_mode: "HTML" });
 }

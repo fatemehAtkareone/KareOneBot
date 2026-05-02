@@ -1,7 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { and, eq, lt, inArray } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
-import { sendMessage, md } from "@/lib/telegram";
+import { sendMessage, h } from "@/lib/telegram";
 import { redis } from "@/lib/redis";
 import { log } from "@/lib/logger";
 
@@ -30,7 +30,7 @@ export const handler: Handler = async () => {
       const ok = await r.set(dedupKey, 1, { nx: true, ex: 24 * 60 * 60 });
       if (ok !== "OK") continue;
     }
-    await sendMessage(row.telegramId, `🚨 ${md(`Task #${row.taskId} is OVERDUE: ${row.title}`)}`).catch((e) =>
+    await sendMessage(row.telegramId, `🚨 Task <b>#${row.taskId}</b> is OVERDUE: ${h(row.title)}`).catch((e) =>
       log.warn("overdue send failed", { err: String(e) })
     );
   }

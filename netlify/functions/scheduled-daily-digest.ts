@@ -1,7 +1,7 @@
 import type { Handler } from "@netlify/functions";
 import { and, eq, gte, lte, inArray } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
-import { sendMessage, md } from "@/lib/telegram";
+import { sendMessage, h } from "@/lib/telegram";
 import { log } from "@/lib/logger";
 
 const OPEN = ["open", "assigned", "in_progress", "blocked", "in_review"] as const;
@@ -35,8 +35,8 @@ export const handler: Handler = async () => {
 
     if (rows.length === 0) continue;
 
-    const lines = rows.map((r) => `• #${r.id} ${r.title}`).join("\n");
-    const text = `📅 ${md("Today's tasks")}:\n${md(lines)}`;
+    const lines = rows.map((r) => `• <b>#${r.id}</b> ${h(r.title)}`).join("\n");
+    const text = `📅 <b>Today's tasks</b>:\n${lines}`;
     await sendMessage(m.telegramId, text).catch((e) => log.warn("digest send failed", { err: String(e) }));
   }
 

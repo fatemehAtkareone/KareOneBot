@@ -41,5 +41,5 @@ export async function handleDiag(ctx: Context) {
     lines.push(`Table count FAIL: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  await ctx.reply("```\n" + lines.join("\n") + "\n```", { parse_mode: "MarkdownV2" });
+  await ctx.reply(`<pre>${lines.join("\n")}</pre>`, { parse_mode: "HTML" });
 }

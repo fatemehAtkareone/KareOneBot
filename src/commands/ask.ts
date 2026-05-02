@@ -3,19 +3,20 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { getMembershipByTelegramId } from "@/lib/rbac";
 import { t } from "@/i18n";
-import { md, sendMessage } from "@/lib/telegram";
+import { h, sendMessage } from "@/lib/telegram";
 import { displayName } from "@/lib/users";
+import { userLang } from "@/lib/locale";
 import { log } from "@/lib/logger";
 
 export async function handleAsk(ctx: Context, args: string[]) {
   const tg = ctx.from!;
-  const lc = tg.language_code;
+  const lc = await userLang(tg.id, tg.language_code);
   const m = await getMembershipByTelegramId(tg.id);
   if (!m) return void ctx.reply(t(lc, "not_member"));
 
   const first = args[0];
   if (!first) {
-    await ctx.reply(t(lc, "invalid_format", { usage: "/ask @username <question> | /ask #tag <question>" }));
+    await ctx.reply(t(lc, "invalid_format", { usage: "/ask @username <question>" }));
     return;
   }
 
@@ -52,7 +53,7 @@ export async function handleAsk(ctx: Context, args: string[]) {
   } else if (tagMatch) {
     targetTag = tagMatch[1]!;
   } else {
-    await ctx.reply(t(lc, "invalid_format", { usage: "/ask @username <question> | /ask #tag <question>" }));
+    await ctx.reply(t(lc, "invalid_format", { usage: "/ask @username <question>" }));
     return;
   }
 
@@ -70,7 +71,7 @@ export async function handleAsk(ctx: Context, args: string[]) {
   if (targetTelegramId) {
     await sendMessage(
       targetTelegramId,
-      `❓ ${md(`Question from ${displayName(tg)} (Q#${q!.id}):`)}\n${md(body)}`
+      `❓ Question from <b>${h(displayName(tg))}</b> (Q#${q!.id}):\n${h(body)}`
     ).catch((e) => log.warn("ask deliver failed", { err: String(e) }));
   }
 

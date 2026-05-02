@@ -5,10 +5,11 @@ import { getMembershipByTelegramId, hasRole } from "@/lib/rbac";
 import { env } from "@/lib/env";
 import { t } from "@/i18n";
 import { audit } from "@/lib/audit";
+import { userLang } from "@/lib/locale";
 
 export async function handleInvite(ctx: Context) {
   const tg = ctx.from!;
-  const lc = tg.language_code;
+  const lc = await userLang(tg.id, tg.language_code);
   const m = await getMembershipByTelegramId(tg.id);
   if (!m) return void ctx.reply(t(lc, "not_member"));
   if (!hasRole(m.role, "admin")) return void ctx.reply(t(lc, "permission_denied"));
