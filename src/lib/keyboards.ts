@@ -171,7 +171,15 @@ export function taskActionsKb(lc: LC, taskId: number, status: string, watching: 
       { text: t(lc, "refresh"), callback_data: `t:view:${id}` },
       { text: t(lc, "btn_tcancel"), callback_data: `t:tcancel:${id}` },
     ],
+    miniAppRow(taskId, lc),
   ];
+}
+
+/** Returns a row with an "Open in Mini App" web_app button, if PUBLIC_URL is configured. */
+export function miniAppRow(taskId: number, lc: LC): Btn[] {
+  const url = process.env.PUBLIC_URL?.replace(/\/$/, "");
+  if (!url) return [{ text: t(lc, "refresh"), callback_data: "noop" }]; // dummy placeholder if no PUBLIC_URL
+  return [{ text: "📱 Open in app · در اپ باز کن", web_app: { url: `${url}/webapp/tasks/${taskId}` } }];
 }
 
 export function priorityChooseKb(lc: LC, taskId: number): Btn[][] {

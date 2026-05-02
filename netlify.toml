@@ -29,3 +29,9 @@
   framework = "#static"
   port = 8888
   targetPort = 0
+
+# SPA fallback so client-side routes (e.g. /webapp/tasks/42) load index.html
+[[redirects]]
+  from = "/webapp/*"
+  to = "/webapp/index.html"
+  status = 200

@@ -1,0 +1,60 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Colors are stored as space-separated RGB triples so Tailwind can compose
+ * opacity modifiers via `rgb(var(--xxx) / <alpha-value>)` (see tailwind.config.js).
+ */
+:root {
+  --tg-bg: 255 255 255;
+  --tg-text: 11 14 18;
+  --tg-hint: 112 117 121;
+  --tg-link: 36 129 204;
+  --tg-button: 36 129 204;
+  --tg-button-text: 255 255 255;
+  --tg-secondary-bg: 244 244 245;
+  --tg-card: 255 255 255;
+  --tg-accent: 36 129 204;
+}
+:root.dark {
+  --tg-bg: 14 17 22;
+  --tg-text: 245 245 247;
+  --tg-hint: 138 143 152;
+  --tg-link: 106 178 242;
+  --tg-button: 80 168 235;
+  --tg-button-text: 255 255 255;
+  --tg-secondary-bg: 26 29 34;
+  --tg-card: 22 26 32;
+  --tg-accent: 106 178 242;
+}
+
+html, body, #root { height: 100%; }
+body { font-family: "Vazirmatn", system-ui, sans-serif; }
+*::-webkit-scrollbar { display: none; }
+
+@layer components {
+  .card {
+    @apply rounded-2xl bg-tg-card shadow-card p-4;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full bg-tg-secondaryBg px-3 py-1.5 text-sm font-medium text-tg-text transition;
+  }
+  .chip-active {
+    @apply bg-tg-accent text-white;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl bg-tg-button px-4 py-2.5 text-sm font-semibold text-tg-buttonText shadow-card transition active:scale-95;
+  }
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-xl bg-tg-secondaryBg px-4 py-2.5 text-sm font-semibold text-tg-text transition active:scale-95;
+  }
+  .skel {
+    @apply rounded-lg bg-gradient-to-r from-tg-secondaryBg via-tg-secondaryBg to-tg-secondaryBg bg-[length:200%_100%] animate-shimmer;
+  }
+}
+
+.priority-p0 { @apply bg-rose-500; }
+.priority-p1 { @apply bg-orange-500; }
+.priority-p2 { @apply bg-amber-400; }
+.priority-p3 { @apply bg-emerald-500; }
