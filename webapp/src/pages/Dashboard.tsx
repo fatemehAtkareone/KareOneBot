@@ -7,8 +7,9 @@ import {
 import Layout from "../components/Layout";
 import StatTile from "../components/StatTile";
 import { CardSkeleton } from "../components/Skeleton";
-import { call, ApiStats, ApiLeaderboardRow, ApiTrendRow } from "../lib/api";
+import { call, ApiStats, ApiLeaderboardRow, ApiTrendRow, ApiError } from "../lib/api";
 import { t } from "../lib/i18n";
+import AuthError from "../components/AuthError";
 
 const STATUS_COLORS: Record<string, string> = {
   open: "#60a5fa", assigned: "#818cf8", in_progress: "#34d399",
@@ -45,11 +46,15 @@ export default function Dashboard() {
       </Layout>
     );
   }
+  if (error instanceof ApiError && error.status === 401) {
+    return <AuthError />;
+  }
   if (error || !data) {
     return (
       <Layout title={t("nav_dashboard")}>
         <div className="card text-center">
           <p className="text-sm text-tg-hint">{t("error")}</p>
+          <p className="mt-1 text-xs text-tg-hint break-words">{error instanceof Error ? error.message : ""}</p>
           <button className="btn mt-3" onClick={() => refetch()}>{t("retry")}</button>
         </div>
       </Layout>

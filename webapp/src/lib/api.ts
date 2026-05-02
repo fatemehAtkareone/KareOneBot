@@ -45,6 +45,12 @@ export interface ApiLeaderboardRow { user_id: number; name: string; username: st
 
 export interface ApiTrendRow { day: string; done: number; open_count: number }
 
+export class ApiError extends Error {
+  constructor(public status: number, public body: string) {
+    super(`${status}: ${body}`);
+  }
+}
+
 export async function call<T>(op: string, params: Record<string, unknown> = {}): Promise<T> {
   const initData = tg()?.initData ?? "";
   const res = await fetch(API, {
@@ -53,8 +59,8 @@ export async function call<T>(op: string, params: Record<string, unknown> = {}):
     body: JSON.stringify({ initData, op, params }),
   });
   if (!res.ok) {
-    const t = await res.text();
-    throw new Error(`${res.status}: ${t}`);
+    const text = await res.text();
+    throw new ApiError(res.status, text);
   }
   return (await res.json()) as T;
 }

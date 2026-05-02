@@ -68,6 +68,10 @@ const en: Dict = {
   retry: "Retry",
   error: "Something went wrong.",
   not_member: "You're not a member of any KareOne workspace yet. Use the bot first.",
+  not_member_title: "Not a member yet",
+  open_in_tg: "This Mini App must be opened from inside Telegram. Tap the button below to open the KareOne bot, then tap the menu button (📊 Open KareOne) on the bottom-left of the chat input.",
+  open_bot: "Open KareOne bot",
+  after_start_hint: "First-timer? Send /start to the bot to register, then come back.",
   cancel: "Cancel",
   save: "Save",
 };
@@ -134,6 +138,10 @@ const fa: Dict = {
   retry: "تلاش مجدد",
   error: "خطایی رخ داد.",
   not_member: "هنوز عضو هیچ فضای کاری KareOne نیستید. ابتدا از ربات استفاده کنید.",
+  not_member_title: "هنوز عضو نیستید",
+  open_in_tg: "این مینی‌اپ باید از داخل تلگرام باز شود. روی دکمهٔ زیر بزنید تا ربات KareOne باز شود، سپس از گوشهٔ پایین-چپ نوار چت روی «📊 Open KareOne» بزنید.",
+  open_bot: "باز کردن ربات KareOne",
+  after_start_hint: "اولین بار است؟ ابتدا /start را به ربات بفرستید تا ثبت‌نام شوید، سپس برگردید.",
   cancel: "لغو",
   save: "ذخیره",
 };
