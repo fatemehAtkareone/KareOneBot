@@ -14,11 +14,19 @@ async function ensureInit() {
     try {
       await route(ctx);
     } catch (e) {
-      log.error("router error", { err: String(e) });
-      try { await ctx.reply("Something went wrong. Try again."); } catch {}
+      const err = e instanceof Error ? `${e.name}: ${e.message}` : String(e);
+      log.error("router error", { err, stack: e instanceof Error ? e.stack : undefined });
+      try {
+        await ctx.reply(`⚠️ Error: ${err.slice(0, 350)}`);
+      } catch {}
     }
   });
-  await bot().init();
+  try {
+    await bot().init();
+  } catch (e) {
+    log.error("bot.init failed", { err: e instanceof Error ? e.message : String(e) });
+    throw e;
+  }
   initialized = true;
 }
 

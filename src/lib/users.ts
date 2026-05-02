@@ -19,13 +19,13 @@ export async function upsertUser(tg: TgUser): Promise<{ id: number }> {
     .limit(1);
 
   if (existing[0]) {
+    // Don't overwrite languageCode on update — that would clobber a user's /lang preference.
     await db()
       .update(schema.users)
       .set({
         telegramUsername: tg.username ?? null,
         firstName: tg.first_name ?? null,
         lastName: tg.last_name ?? null,
-        languageCode: tg.language_code ?? null,
       })
       .where(eq(schema.users.id, existing[0].id));
     return { id: existing[0].id };

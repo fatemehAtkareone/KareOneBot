@@ -68,5 +68,19 @@ export async function handleStart(ctx: Context, args: string[]) {
     return;
   }
 
-  await ctx.reply(t(tg.language_code, "welcome", { name: md(displayName(tg)) }), { parse_mode: "MarkdownV2" });
+  await ctx.reply(
+    `${t(tg.language_code, "welcome", { name: md(displayName(tg)) })}\n\n` +
+      "Choose your language / زبان را انتخاب کنید:",
+    {
+      parse_mode: "MarkdownV2",
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: "🇮🇷 فارسی", callback_data: "lang:fa" },
+            { text: "🇬🇧 English", callback_data: "lang:en" },
+          ],
+        ],
+      },
+    }
+  );
 }
