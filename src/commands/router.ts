@@ -15,6 +15,9 @@ import { handleInvite } from "./invite";
 import { handleCancel } from "./cancel";
 import { handleLang, handleLangCallback } from "./lang";
 import { handleSettings, handleSettingsCallback } from "./settings";
+import { handleSla } from "./sla";
+import { handleApprovalRequest, handleCallback as approvalCallback, consumeRejectReason } from "./approval";
+import { handleReport } from "./report";
 import { handleDiag } from "./diag";
 import { getState } from "@/lib/redis";
 import { t } from "@/i18n";
@@ -58,6 +61,9 @@ export async function route(ctx: Context): Promise<void> {
       case "set":
         await handleSettingsCallback(ctx, rest);
         return;
+      case "ap":
+        await approvalCallback(ctx, rest);
+        return;
       default:
         await ctx.answerCallbackQuery().catch(() => {});
         return;
@@ -85,6 +91,10 @@ export async function route(ctx: Context): Promise<void> {
     }
     if (state?.flow === "answer") {
       await consumeAnswerInput(ctx, state as { flow: "answer"; questionId: number });
+      return;
+    }
+    if (state?.flow === "reject_reason") {
+      await consumeRejectReason(ctx, state as { flow: "reject_reason"; approvalStepId: number });
       return;
     }
   }
@@ -115,6 +125,11 @@ export async function route(ctx: Context): Promise<void> {
     case "/work":           return handleWork(ctx, args);
     case "/invite":         return handleInvite(ctx);
     case "/settings":       return handleSettings(ctx);
+    case "/sla":            return handleSla(ctx, args);
+    case "/report":
+    case "/stats":          return handleReport(ctx);
+    case "/approval":
+    case "/approve_request":return handleApprovalRequest(ctx, args);
     case "/lang":
     case "/language":       return handleLang(ctx, args);
     case "/diag":           return handleDiag(ctx);

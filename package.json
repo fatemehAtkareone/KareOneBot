@@ -18,7 +18,8 @@
     "tg:set-webhook": "tsx scripts/set-webhook.ts",
     "tg:delete-webhook": "tsx scripts/delete-webhook.ts",
     "tg:get-webhook": "tsx scripts/get-webhook.ts",
-    "tg:set-commands": "tsx scripts/set-commands.ts"
+    "tg:set-commands": "tsx scripts/set-commands.ts",
+    "tg:set-profile": "tsx scripts/set-bot-profile.ts"
   },
   "dependencies": {
     "@netlify/functions": "^2.8.2",

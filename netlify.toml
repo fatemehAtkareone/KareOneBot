@@ -22,6 +22,9 @@
 [functions."scheduled-recurrence-spawner"]
   schedule = "*/10 * * * *"
 
+[functions."scheduled-sla-watch"]
+  schedule = "0 * * * *"
+
 [dev]
   framework = "#static"
   port = 8888

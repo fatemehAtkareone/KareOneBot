@@ -22,6 +22,10 @@ const fa: Dict = {
     "/answer &lt;qid&gt; &lt;متن&gt; — پاسخ دادن\n" +
     "/questions — پرسش‌های باز\n" +
     "/kb &lt;عبارت&gt; — جست‌وجوی پاسخ‌ها\n\n" +
+    "<b>🛂 تأییدها · SLA · گزارش</b>\n" +
+    "/approval &lt;شناسه&gt; @user1 @user2 [all] — درخواست تأیید\n" +
+    "/sla — نمایش/تنظیم SLA (مدیر)\n" +
+    "/report — آمار فضای کاری\n\n" +
     "<b>⚙️ شما و فضای کاری</b>\n" +
     "/settings — تنظیمات\n" +
     "/whoami — پروفایل\n" +

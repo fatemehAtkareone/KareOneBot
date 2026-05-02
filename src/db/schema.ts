@@ -341,6 +341,66 @@ export const inviteTokens = pgTable("invite_tokens", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+// ----- SLA policies (per workspace, per priority) -----
+export const slaPolicies = pgTable(
+  "sla_policies",
+  {
+    workspaceId: bigint("workspace_id", { mode: "number" })
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    priority: priorityEnum("priority").notNull(),
+    responseMinutes: integer("response_minutes").notNull(),
+    resolutionMinutes: integer("resolution_minutes").notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.workspaceId, t.priority] }),
+  })
+);
+
+// ----- Approvals -----
+export const approvalTypeEnum = pgEnum("approval_type", ["any", "all"]);
+export const approvalStatusEnum = pgEnum("approval_status", ["pending", "approved", "rejected", "cancelled"]);
+export const approvalDecisionEnum = pgEnum("approval_decision", ["pending", "approved", "rejected"]);
+
+export const approvals = pgTable("approvals", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  taskId: bigint("task_id", { mode: "number" })
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  type: approvalTypeEnum("type").notNull().default("any"),
+  status: approvalStatusEnum("status").notNull().default("pending"),
+  requiredCount: integer("required_count").notNull().default(1),
+  approvedCount: integer("approved_count").notNull().default(0),
+  rejectedCount: integer("rejected_count").notNull().default(0),
+  requestedBy: bigint("requested_by", { mode: "number" }).notNull().references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
+export const approvalSteps = pgTable("approval_steps", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  approvalId: bigint("approval_id", { mode: "number" })
+    .notNull()
+    .references(() => approvals.id, { onDelete: "cascade" }),
+  approverUserId: bigint("approver_user_id", { mode: "number" })
+    .notNull()
+    .references(() => users.id),
+  decision: approvalDecisionEnum("decision").notNull().default("pending"),
+  reason: text("reason"),
+  decidedAt: timestamp("decided_at", { withTimezone: true }),
+});
+
+// ----- SLA escalation log -----
+export const slaEscalations = pgTable("sla_escalations", {
+  id: bigserial("id", { mode: "number" }).primaryKey(),
+  taskId: bigint("task_id", { mode: "number" })
+    .notNull()
+    .references(() => tasks.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(), // "warn80" | "breach"
+  notifiedUserId: bigint("notified_user_id", { mode: "number" }).references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
+
 // ----- Audit log -----
 export const auditLog = pgTable(
   "audit_log",

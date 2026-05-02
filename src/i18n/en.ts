@@ -22,6 +22,10 @@ const en: Dict = {
     "/answer &lt;qid&gt; &lt;text&gt; — reply\n" +
     "/questions — open questions\n" +
     "/kb &lt;query&gt; — search past answers\n\n" +
+    "<b>🛂 Approvals · SLA · Reports</b>\n" +
+    "/approval &lt;task_id&gt; @user1 @user2 [all] — request approval\n" +
+    "/sla — view/set SLA targets per priority (admin)\n" +
+    "/report — workspace + personal stats\n\n" +
     "<b>⚙️ You &amp; workspace</b>\n" +
     "/settings — preferences menu\n" +
     "/whoami — show your profile\n" +
