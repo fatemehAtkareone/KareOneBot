@@ -1,39 +1,28 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import Layout from "../components/Layout";
 import { CardSkeleton } from "../components/Skeleton";
-import { call, ApiTask } from "../lib/api";
+import AuthError from "../components/AuthError";
+import { call, ApiTask, ApiError } from "../lib/api";
+import { PRIORITY_DOT, STATUS_KEYS } from "../lib/labels";
 import { t } from "../lib/i18n";
 import { haptic } from "../lib/tg";
 
-type Filter = "all" | "mine" | "watching" | "done";
-
-const PR_DOT: Record<string, string> = { p0: "priority-p0", p1: "priority-p1", p2: "priority-p2", p3: "priority-p3" };
-const STATUS_LABEL: Record<string, string> = {
-  open: "Open", assigned: "Assigned", in_progress: "In progress", blocked: "Blocked",
-  in_review: "In review", done: "Done", cancelled: "Cancelled", rejected: "Rejected",
-};
+type Filter = "all" | "mine" | "watching" | "done" | "overdue";
 
 export default function Tasks() {
   const [filter, setFilter] = useState<Filter>("mine");
   const [q, setQ] = useState("");
+  const [submitted, setSubmitted] = useState("");
   const nav = useNavigate();
-  const { data, isLoading } = useQuery({
-    queryKey: ["tasks", filter],
-    queryFn: () => call<{ rows: ApiTask[] }>("tasks", { filter, limit: 100 }),
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["tasks", filter, submitted],
+    queryFn: () => call<{ rows: ApiTask[] }>("tasks", { filter, search: submitted, limit: 100 }),
   });
 
-  const filtered = useMemo(() => {
-    const rows = data?.rows ?? [];
-    if (!q.trim()) return rows;
-    const needle = q.trim().toLowerCase();
-    return rows.filter((r) =>
-      r.title.toLowerCase().includes(needle) ||
-      (r.description ?? "").toLowerCase().includes(needle)
-    );
-  }, [data, q]);
+  if (error instanceof ApiError && error.status === 401) return <AuthError />;
 
   return (
     <Layout
@@ -45,14 +34,17 @@ export default function Tasks() {
       }
     >
       <div className="sticky top-14 z-10 -mx-4 mb-3 bg-tg-bg/80 px-4 pt-1 pb-3 backdrop-blur-md">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={t("t_search")}
-          className="w-full rounded-xl bg-tg-secondaryBg px-3 py-2 text-sm text-tg-text outline-none placeholder:text-tg-hint"
-        />
+        <form onSubmit={(e) => { e.preventDefault(); setSubmitted(q.trim()); haptic("light"); }} className="flex gap-2">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onBlur={() => setSubmitted(q.trim())}
+            placeholder={t("t_search")}
+            className="w-full rounded-xl bg-tg-secondaryBg px-3 py-2 text-sm text-tg-text outline-none placeholder:text-tg-hint"
+          />
+        </form>
         <div className="mt-3 flex gap-2 overflow-x-auto">
-          {(["mine", "all", "watching", "done"] as Filter[]).map((f) => (
+          {(["mine", "all", "watching", "overdue", "done"] as Filter[]).map((f) => (
             <button
               key={f}
               onClick={() => { setFilter(f); haptic("selection"); }}
@@ -68,12 +60,12 @@ export default function Tasks() {
         <div className="space-y-2">
           <CardSkeleton /><CardSkeleton /><CardSkeleton />
         </div>
-      ) : filtered.length === 0 ? (
+      ) : (data?.rows ?? []).length === 0 ? (
         <div className="card text-center text-sm text-tg-hint">{t("t_empty")}</div>
       ) : (
         <ul className="space-y-2">
           <AnimatePresence initial={false}>
-            {filtered.map((r, i) => {
+            {data!.rows.map((r, i) => {
               const overdue = r.dueAt && new Date(r.dueAt) < new Date() && r.status !== "done";
               return (
                 <motion.li
@@ -87,11 +79,11 @@ export default function Tasks() {
                   onClick={() => { haptic("light"); nav(`/tasks/${r.id}`); }}
                   className="card flex items-start gap-3 cursor-pointer"
                 >
-                  <div className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${PR_DOT[r.priority] ?? "bg-zinc-400"}`} />
+                  <div className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${PRIORITY_DOT[r.priority] ?? "bg-zinc-400"}`} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline justify-between gap-2">
                       <h3 className="truncate text-sm font-semibold">#{r.id} · {r.title}</h3>
-                      <span className="shrink-0 text-[10px] text-tg-hint">{STATUS_LABEL[r.status] ?? r.status}</span>
+                      <span className="shrink-0 text-[10px] text-tg-hint">{t(STATUS_KEYS[r.status] ?? "status_open")}</span>
                     </div>
                     {r.description && <p className="mt-0.5 line-clamp-2 text-xs text-tg-hint">{r.description}</p>}
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-tg-hint">

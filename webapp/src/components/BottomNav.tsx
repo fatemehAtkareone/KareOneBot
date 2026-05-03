@@ -8,7 +8,7 @@ const items = [
   { to: "/tasks", icon: "📋", labelKey: "nav_tasks" },
   { to: "/kanban", icon: "🗂️", labelKey: "nav_kanban" },
   { to: "/calendar", icon: "📅", labelKey: "nav_calendar" },
-  { to: "/qa", icon: "💬", labelKey: "nav_qa" },
+  { to: "/more", icon: "⋯", labelKey: "nav_more" },
 ];
 
 export default function BottomNav() {
