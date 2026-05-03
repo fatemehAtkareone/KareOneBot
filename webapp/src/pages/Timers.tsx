@@ -20,7 +20,7 @@ export default function Timers() {
     onSuccess: () => { refetch(); qc.invalidateQueries({ queryKey: ["tasks"] }); haptic("success"); },
   });
 
-  if (error instanceof ApiError && error.status === 401) return <AuthError />;
+  if (error instanceof ApiError && error.status === 401) return <AuthError reason={error.reason} />;
 
   return (
     <Layout title={t("more_timers")}>

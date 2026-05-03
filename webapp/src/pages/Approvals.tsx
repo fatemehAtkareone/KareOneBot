@@ -30,7 +30,7 @@ export default function Approvals() {
   const [rejecting, setRejecting] = useState<number | null>(null);
   const [reason, setReason] = useState("");
 
-  if (error instanceof ApiError && error.status === 401) return <AuthError />;
+  if (error instanceof ApiError && error.status === 401) return <AuthError reason={error.reason} />;
 
   return (
     <Layout title={t("ap_title")}>

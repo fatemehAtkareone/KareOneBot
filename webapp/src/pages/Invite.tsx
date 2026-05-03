@@ -24,7 +24,7 @@ export default function Invite() {
     onSuccess: (r) => { setJustCreated(r); qc.invalidateQueries({ queryKey: ["invites"] }); haptic("success"); setCopied(false); },
   });
 
-  if (list.error instanceof ApiError && list.error.status === 401) return <AuthError />;
+  if (list.error instanceof ApiError && list.error.status === 401) return <AuthError reason={list.error.reason} />;
   if (list.error instanceof ApiError && list.error.status === 500 && /admin/.test(list.error.body)) {
     return (
       <Layout title={t("more_invite")}>

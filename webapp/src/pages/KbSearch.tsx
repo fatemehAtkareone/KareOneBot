@@ -19,7 +19,7 @@ export default function KbSearch() {
     enabled: submitted.length > 0,
   });
 
-  if (error instanceof ApiError && error.status === 401) return <AuthError />;
+  if (error instanceof ApiError && error.status === 401) return <AuthError reason={error.reason} />;
 
   return (
     <Layout title={t("kb_title")}>

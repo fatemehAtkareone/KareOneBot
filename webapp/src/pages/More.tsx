@@ -39,7 +39,7 @@ const SECTIONS_ME: Section[] = [
 
 export default function More() {
   const { data, error } = useQuery({ queryKey: ["me"], queryFn: () => call<MeRes>("me") });
-  if (error instanceof ApiError && error.status === 401) return <AuthError />;
+  if (error instanceof ApiError && error.status === 401) return <AuthError reason={error.reason} />;
   const isAdmin = data?.membership?.role === "admin" || data?.membership?.role === "super_admin";
 
   return (

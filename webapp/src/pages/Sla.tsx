@@ -29,7 +29,7 @@ export default function Sla() {
     }
   }, [data]);
 
-  if (error instanceof ApiError && error.status === 401) return <AuthError />;
+  if (error instanceof ApiError && error.status === 401) return <AuthError reason={error.reason} />;
   const isAdmin = me.data?.membership?.role === "admin" || me.data?.membership?.role === "super_admin";
 
   return (

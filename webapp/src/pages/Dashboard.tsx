@@ -47,7 +47,7 @@ export default function Dashboard() {
     );
   }
   if (error instanceof ApiError && error.status === 401) {
-    return <AuthError />;
+    return <AuthError reason={error.reason} />;
   }
   if (error || !data) {
     return (

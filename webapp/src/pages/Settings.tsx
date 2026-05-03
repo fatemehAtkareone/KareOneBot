@@ -44,7 +44,7 @@ export default function Settings() {
     update.mutate({ language: l });
   }
 
-  if (error instanceof ApiError && error.status === 401) return <AuthError />;
+  if (error instanceof ApiError && error.status === 401) return <AuthError reason={error.reason} />;
 
   return (
     <Layout title={t("set_title")}>

@@ -43,7 +43,7 @@ export default function QuestionDetail() {
     return () => { w.BackButton.hide(); w.BackButton.offClick(cb); };
   }, [nav]);
 
-  if (error instanceof ApiError && error.status === 401) return <AuthError />;
+  if (error instanceof ApiError && error.status === 401) return <AuthError reason={error.reason} />;
   if (isLoading) return <Layout title={`Q#${id}`}><CardSkeleton /></Layout>;
   if (!data) return <Layout title={`Q#${id}`}><div className="card text-sm text-tg-hint">{t("error")}</div></Layout>;
 

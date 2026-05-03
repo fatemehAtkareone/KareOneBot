@@ -24,7 +24,7 @@ export default function Projects() {
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
 
-  if (error instanceof ApiError && error.status === 401) return <AuthError />;
+  if (error instanceof ApiError && error.status === 401) return <AuthError reason={error.reason} />;
 
   return (
     <Layout

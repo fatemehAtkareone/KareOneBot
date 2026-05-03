@@ -22,7 +22,7 @@ export default function Tasks() {
     queryFn: () => call<{ rows: ApiTask[] }>("tasks", { filter, search: submitted, limit: 100 }),
   });
 
-  if (error instanceof ApiError && error.status === 401) return <AuthError />;
+  if (error instanceof ApiError && error.status === 401) return <AuthError reason={error.reason} />;
 
   return (
     <Layout

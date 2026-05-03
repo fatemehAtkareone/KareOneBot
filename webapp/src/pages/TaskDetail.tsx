@@ -87,7 +87,7 @@ export default function TaskDetail() {
     return () => { w.BackButton.hide(); w.BackButton.offClick(cb); };
   }, [nav]);
 
-  if (error instanceof ApiError && error.status === 401) return <AuthError />;
+  if (error instanceof ApiError && error.status === 401) return <AuthError reason={error.reason} />;
   if (isLoading) return <Layout title={`#${id}`}><CardSkeleton /><div className="mt-3"><CardSkeleton /></div></Layout>;
   if (!data) return <Layout title={`#${id}`}><div className="card text-sm text-tg-hint">{t("error")}</div></Layout>;
 

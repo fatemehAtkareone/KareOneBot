@@ -19,7 +19,7 @@ export default function History() {
     queryFn: () => call<{ rows: ApiHistoryRow[] }>("history.workspace"),
   });
 
-  if (error instanceof ApiError && error.status === 401) return <AuthError />;
+  if (error instanceof ApiError && error.status === 401) return <AuthError reason={error.reason} />;
 
   return (
     <Layout title={t("hist_workspace")}>

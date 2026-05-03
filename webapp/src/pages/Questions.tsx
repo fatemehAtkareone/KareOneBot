@@ -26,7 +26,7 @@ export default function Questions() {
 
   const filtered = useMemo(() => (data?.rows ?? []).filter((r) => (tab === "open" ? !r.resolvedAt : !!r.resolvedAt)), [data, tab]);
 
-  if (error instanceof ApiError && error.status === 401) return <AuthError />;
+  if (error instanceof ApiError && error.status === 401) return <AuthError reason={error.reason} />;
 
   return (
     <Layout

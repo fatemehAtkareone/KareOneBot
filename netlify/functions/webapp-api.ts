@@ -23,7 +23,10 @@ export const handler: Handler = async (event) => {
   const p = (body.params ?? {}) as Record<string, unknown>;
 
   const session = await authenticate(initData);
-  if (!session) return resp(401, { error: "unauthorized" });
+  if (!session.ok) {
+    // Return rich diagnostics so the Mini App can show the right message
+    return resp(401, { error: "unauthorized", reason: session.reason, ...("tgUserId" in session ? { tgUserId: session.tgUserId } : {}) });
+  }
   const m: Mem = session.membership as Mem;
   const tg = session.tgUser;
 

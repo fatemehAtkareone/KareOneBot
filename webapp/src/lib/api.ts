@@ -91,8 +91,15 @@ export interface ApiHistoryRow {
 export interface ApiTimer { taskId: number; startedAt: number; minutes: number; title: string }
 
 export class ApiError extends Error {
+  reason?: string;
+  payload?: Record<string, unknown>;
   constructor(public status: number, public body: string) {
     super(`${status}: ${body}`);
+    try {
+      const j = JSON.parse(body) as { reason?: string; [k: string]: unknown };
+      this.reason = j.reason;
+      this.payload = j;
+    } catch { /* not JSON */ }
   }
 }
 
